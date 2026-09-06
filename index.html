@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Visual Timer</title>
+  
+  <!-- シンプルな時計アイコン（SVG Data URI埋め込み） -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%231c1c1e' stroke='%23ffffff' stroke-width='5'/%3E%3Cline x1='32' y1='32' x2='32' y2='16' stroke='%23ffffff' stroke-width='4' stroke-linecap='round'/%3E%3Cline x1='32' y1='32' x2='44' y2='32' stroke='%23ffffff' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='32' r='3' fill='%23ffffff'/%3E%3C/svg%3E">
+
   <style>
     :root {
       --primary-color: #007aff;
@@ -51,7 +55,7 @@
     }
 
     body.is-running .top-bar {
-      opacity: 0.4;
+      opacity: 0.35;
     }
 
     .icon-btn {
@@ -79,27 +83,27 @@
       align-items: center;
       gap: 20px;
       width: 100%;
-      max-width: 440px;
-      transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+      max-width: 460px;
+      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     /* 円形ゲージコンテナ */
     .gauge-wrapper {
       position: relative;
-      width: min(68vw, 300px);
-      height: min(68vw, 300px);
+      width: min(70vw, 310px);
+      height: min(70vw, 310px);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       transform-origin: center center;
-      transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), margin 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), margin 0.55s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* タイマー動作中の拡大表示 */
+    /* タイマー実行時の特大スケールアップ */
     body.is-running .gauge-wrapper {
-      transform: scale(1.28);
-      margin: 24px 0;
+      transform: scale(1.48);
+      margin: 40px 0;
     }
 
     .gauge-svg {
@@ -147,7 +151,7 @@
       font-weight: 400;
     }
 
-    /* ピッカーコンテナ：スタート時にスムーズに縮小・非表示 */
+    /* ピッカー折りたたみラッパー */
     .picker-box-wrapper {
       width: 100%;
       max-height: calc(var(--item-height) * 5);
@@ -164,9 +168,9 @@
     body.is-running .picker-box-wrapper {
       max-height: 0;
       opacity: 0;
-      transform: scaleY(0.85);
-      margin-top: -10px;
-      margin-bottom: -10px;
+      transform: scaleY(0.8);
+      margin-top: -12px;
+      margin-bottom: -12px;
       pointer-events: none;
     }
 
@@ -248,11 +252,12 @@
       pointer-events: none;
     }
 
-    /* ボタン */
+    /* 操作ボタン */
     .buttons-wrapper {
       display: flex;
       gap: 12px;
       width: 100%;
+      z-index: 5;
     }
 
     button.control-btn {
@@ -280,7 +285,7 @@
       background: var(--danger-color);
     }
 
-    /* 設定モーダルシート */
+    /* 設定モーダル */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -470,7 +475,7 @@
 </head>
 <body>
 
-  <!-- 設定ボタン（右上） -->
+  <!-- 設定ボタン -->
   <div class="top-bar">
     <button class="icon-btn" id="btnOpenSettings" aria-label="設定">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -490,7 +495,7 @@
       <div class="time-display" id="timeDisplay">00:00:00</div>
     </div>
 
-    <!-- 折りたたみラッパー付き ドラムピッカー -->
+    <!-- ピッカー -->
     <div class="picker-box-wrapper" id="pickerBoxWrapper">
       <div class="picker-box" id="pickerBox">
         <div class="picker-selection-bar"></div>
@@ -584,7 +589,6 @@
   </div>
 
   <script>
-    // --- ローカルストレージ管理キー ---
     const STORAGE_KEYS = {
       SOUND: 'visual_timer_sound',
       PREVIEW: 'visual_timer_preview',
@@ -624,7 +628,7 @@
     let isAlarmLooping = false;
     let alarmLoopInterval = null;
 
-    // --- 音声生成エンジン（Base64 WAV） ---
+    // --- 音声生成エンジン（Base64 WAV合成） ---
     function createWavHeader(sampleRate, numSamples) {
       const buffer = new Uint8Array(44 + numSamples * 2);
       function writeStr(offset, str) {
@@ -837,22 +841,19 @@
       updateGauge(1);
     }
 
-    // --- 設定の保存と復元（localStorage） ---
+    // --- localStorage復元 ---
     function loadSavedSettings() {
-      // 1. サウンド
       const savedSound = localStorage.getItem(STORAGE_KEYS.SOUND);
       if (savedSound && soundDefs[savedSound]) {
         currentSoundType = savedSound;
         soundSelect.value = savedSound;
       }
 
-      // 2. プレビュートグル
       const savedPreview = localStorage.getItem(STORAGE_KEYS.PREVIEW);
       if (savedPreview !== null) {
         togglePreview.checked = savedPreview === 'true';
       }
 
-      // 3. テーマカラー
       const savedColor = localStorage.getItem(STORAGE_KEYS.COLOR);
       if (savedColor) {
         document.documentElement.style.setProperty('--primary-color', savedColor);
@@ -1094,7 +1095,6 @@
       }
     }
 
-    // コントロールボタン
     btnStart.addEventListener('click', () => {
       primeAudio();
 
@@ -1154,7 +1154,6 @@
       }
     });
 
-    // 保存設定の読み込み＆初期化
     loadSavedSettings();
     onDurationChange();
   </script>
