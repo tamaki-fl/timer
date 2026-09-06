@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Visual Timer</title>
   
-  <!-- シンプルな時計アイコン（SVG Data URI埋め込み） -->
+  <!-- シンプルな時計アイコン -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%231c1c1e' stroke='%23ffffff' stroke-width='5'/%3E%3Cline x1='32' y1='32' x2='32' y2='16' stroke='%23ffffff' stroke-width='4' stroke-linecap='round'/%3E%3Cline x1='32' y1='32' x2='44' y2='32' stroke='%23ffffff' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='32' r='3' fill='%23ffffff'/%3E%3C/svg%3E">
 
   <style>
@@ -36,11 +36,12 @@
       color: var(--text-color);
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", sans-serif;
       min-height: 100vh;
+      min-height: -webkit-fill-available;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 20px 16px;
+      padding: 24px 20px;
       overflow: hidden;
       position: relative;
     }
@@ -51,7 +52,7 @@
       top: 16px;
       right: 16px;
       z-index: 10;
-      transition: opacity 0.3s ease, transform 0.3s ease;
+      transition: opacity 0.3s ease;
     }
 
     body.is-running .top-bar {
@@ -81,29 +82,38 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 20px;
+      justify-content: center;
       width: 100%;
-      max-width: 460px;
-      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      max-width: 440px;
+      height: 100%;
+      max-height: 820px;
+      gap: 20px;
+      transition: gap 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* タイマー稼働時のコンテナ間隔 */
+    body.is-running .container {
+      gap: 40px;
     }
 
     /* 円形ゲージコンテナ */
     .gauge-wrapper {
       position: relative;
-      width: min(70vw, 310px);
-      height: min(70vw, 310px);
+      width: min(65vw, 42vh, 290px);
+      height: min(65vw, 42vh, 290px);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       transform-origin: center center;
       transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), margin 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+      margin: 10px 0;
     }
 
-    /* タイマー実行時の特大スケールアップ */
+    /* 稼働時の特大スケールアップと位置オフセット */
     body.is-running .gauge-wrapper {
-      transform: scale(1.48);
-      margin: 40px 0;
+      transform: scale(1.46) translateY(-8px);
+      margin: 36px 0 24px 0;
     }
 
     .gauge-svg {
@@ -140,7 +150,7 @@
 
     .time-display {
       position: absolute;
-      font-size: clamp(2.3rem, 7.8vw, 3.5rem);
+      font-size: clamp(2.2rem, 7.5vw, 3.4rem);
       font-weight: 300;
       font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
@@ -168,9 +178,9 @@
     body.is-running .picker-box-wrapper {
       max-height: 0;
       opacity: 0;
-      transform: scaleY(0.8);
-      margin-top: -12px;
-      margin-bottom: -12px;
+      transform: scaleY(0.7);
+      margin-top: -10px;
+      margin-bottom: -10px;
       pointer-events: none;
     }
 
@@ -252,12 +262,18 @@
       pointer-events: none;
     }
 
-    /* 操作ボタン */
+    /* 操作ボタンエリア */
     .buttons-wrapper {
       display: flex;
       gap: 12px;
       width: 100%;
       z-index: 5;
+      margin-top: 4px;
+      transition: margin-top 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    body.is-running .buttons-wrapper {
+      margin-top: 16px;
     }
 
     button.control-btn {
@@ -628,7 +644,7 @@
     let isAlarmLooping = false;
     let alarmLoopInterval = null;
 
-    // --- 音声生成エンジン（Base64 WAV合成） ---
+    // --- 音声生成（Base64 WAV合成） ---
     function createWavHeader(sampleRate, numSamples) {
       const buffer = new Uint8Array(44 + numSamples * 2);
       function writeStr(offset, str) {
@@ -841,7 +857,6 @@
       updateGauge(1);
     }
 
-    // --- localStorage復元 ---
     function loadSavedSettings() {
       const savedSound = localStorage.getItem(STORAGE_KEYS.SOUND);
       if (savedSound && soundDefs[savedSound]) {
