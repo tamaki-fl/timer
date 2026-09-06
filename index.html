@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Visual Timer</title>
+  <style>
+    :root {
+      --primary-color: #007aff;
+      --bg-color: #000000;
+      --surface-color: #1c1c1e;
+      --surface-color-sub: #2c2c2e;
+      --track-color: #2c2c2e;
+      --text-color: #ffffff;
+      --subtext-color: #8e8e93;
+      --item-height: 44px;
+      --danger-color: #ff453a;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 16px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* 右上の設定ボタン */
+    .top-bar {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      z-index: 10;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    body.is-running .top-bar {
+      opacity: 0.4;
+    }
+
+    .icon-btn {
+      background: var(--surface-color);
+      border: none;
+      color: var(--text-color);
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      transition: transform 0.1s, opacity 0.2s;
+    }
+
+    .icon-btn:active {
+      transform: scale(0.92);
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      width: 100%;
+      max-width: 440px;
+      transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* 円形ゲージコンテナ */
+    .gauge-wrapper {
+      position: relative;
+      width: min(68vw, 300px);
+      height: min(68vw, 300px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transform-origin: center center;
+      transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), margin 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* タイマー動作中の拡大表示 */
+    body.is-running .gauge-wrapper {
+      transform: scale(1.28);
+      margin: 24px 0;
+    }
+
+    .gauge-svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    circle {
+      fill: none;
+      stroke-width: 16px;
+    }
+
+    .gauge-track {
+      stroke: var(--track-color);
+    }
+
+    .gauge-progress {
+      stroke: var(--primary-color);
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.08s linear, stroke 0.3s ease;
+    }
+
+    @keyframes pulseAlarm {
+      0% { opacity: 1; }
+      50% { opacity: 0.25; }
+      100% { opacity: 1; }
+    }
+
+    .alarm-active .gauge-progress {
+      stroke: var(--danger-color) !important;
+      animation: pulseAlarm 0.8s infinite ease-in-out;
+    }
+
+    .time-display {
+      position: absolute;
+      font-size: clamp(2.3rem, 7.8vw, 3.5rem);
+      font-weight: 300;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+      transition: font-weight 0.3s ease;
+    }
+
+    body.is-running .time-display {
+      font-weight: 400;
+    }
+
+    /* ピッカーコンテナ：スタート時にスムーズに縮小・非表示 */
+    .picker-box-wrapper {
+      width: 100%;
+      max-height: calc(var(--item-height) * 5);
+      opacity: 1;
+      transform: scaleY(1);
+      transform-origin: top center;
+      transition: max-height 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                  opacity 0.35s ease,
+                  transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                  margin 0.45s ease;
+      overflow: hidden;
+    }
+
+    body.is-running .picker-box-wrapper {
+      max-height: 0;
+      opacity: 0;
+      transform: scaleY(0.85);
+      margin-top: -10px;
+      margin-bottom: -10px;
+      pointer-events: none;
+    }
+
+    .picker-box {
+      position: relative;
+      width: 100%;
+      height: calc(var(--item-height) * 5);
+      background: var(--surface-color);
+      border-radius: 20px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 10px;
+      box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+      touch-action: none;
+    }
+
+    .picker-selection-bar {
+      position: absolute;
+      top: calc(var(--item-height) * 2);
+      left: 10px;
+      right: 10px;
+      height: var(--item-height);
+      background: rgba(255, 255, 255, 0.09);
+      border-radius: 10px;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .picker-col-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      flex: 1;
+      position: relative;
+      z-index: 2;
+    }
+
+    .picker-viewport {
+      width: 50px;
+      height: 100%;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .picker-wheel {
+      position: absolute;
+      top: calc(var(--item-height) * 2);
+      left: 0;
+      width: 100%;
+      will-change: transform;
+    }
+
+    .picker-cell {
+      height: var(--item-height);
+      line-height: var(--item-height);
+      text-align: center;
+      font-size: 1.35rem;
+      font-weight: 500;
+      color: var(--subtext-color);
+      font-variant-numeric: tabular-nums;
+      transition: color 0.15s, transform 0.15s;
+    }
+
+    .picker-cell.active {
+      color: var(--text-color);
+      font-weight: 700;
+      transform: scale(1.15);
+    }
+
+    .picker-unit-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--subtext-color);
+      margin-left: 2px;
+      margin-right: 6px;
+      pointer-events: none;
+    }
+
+    /* ボタン */
+    .buttons-wrapper {
+      display: flex;
+      gap: 12px;
+      width: 100%;
+    }
+
+    button.control-btn {
+      flex: 1;
+      padding: 16px;
+      font-size: 1.15rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      color: #ffffff;
+      background: var(--surface-color);
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    button.control-btn:active {
+      transform: scale(0.97);
+    }
+
+    button.control-btn.primary {
+      background: var(--primary-color);
+    }
+
+    button.control-btn.danger {
+      background: var(--danger-color);
+    }
+
+    /* 設定モーダルシート */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 100;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-sheet {
+      background: var(--surface-color);
+      width: 100%;
+      max-width: 440px;
+      border-radius: 28px 28px 0 0;
+      padding: 24px 20px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1);
+    }
+
+    .modal-overlay.open .modal-sheet {
+      transform: translateY(0);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 12px;
+    }
+
+    .modal-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+
+    .modal-close-btn {
+      background: var(--surface-color-sub);
+      border: none;
+      color: var(--text-color);
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 14px;
+      cursor: pointer;
+    }
+
+    .settings-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .setting-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface-color-sub);
+      padding: 12px 16px;
+      border-radius: 14px;
+    }
+
+    .setting-text-group {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .setting-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .setting-desc {
+      font-size: 0.75rem;
+      color: var(--subtext-color);
+    }
+
+    .sound-select-box {
+      position: relative;
+    }
+
+    select.sound-select {
+      appearance: none;
+      -webkit-appearance: none;
+      background: #3a3a3c;
+      color: var(--text-color);
+      border: none;
+      border-radius: 8px;
+      padding: 8px 30px 8px 12px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .sound-select-box::after {
+      content: "▼";
+      font-size: 0.65rem;
+      color: var(--subtext-color);
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 30px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #3a3a3c;
+      transition: 0.25s;
+      border-radius: 30px;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 24px;
+      width: 24px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.25s;
+      border-radius: 50%;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+
+    input:checked + .toggle-slider {
+      background-color: #34c759;
+    }
+
+    input:checked + .toggle-slider:before {
+      transform: translateX(20px);
+    }
+
+    .color-presets {
+      display: flex;
+      gap: 10px;
+    }
+
+    .color-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .color-btn.active {
+      border-color: #ffffff;
+      transform: scale(1.15);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 設定ボタン（右上） -->
+  <div class="top-bar">
+    <button class="icon-btn" id="btnOpenSettings" aria-label="設定">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </button>
+  </div>
+
+  <div class="container">
+    <!-- 円形ゲージ -->
+    <div class="gauge-wrapper" id="gaugeWrapper">
+      <svg class="gauge-svg" viewBox="0 0 360 360">
+        <circle class="gauge-track" cx="180" cy="180" r="155"></circle>
+        <circle class="gauge-progress" id="progressCircle" cx="180" cy="180" r="155"></circle>
+      </svg>
+      <div class="time-display" id="timeDisplay">00:00:00</div>
+    </div>
+
+    <!-- 折りたたみラッパー付き ドラムピッカー -->
+    <div class="picker-box-wrapper" id="pickerBoxWrapper">
+      <div class="picker-box" id="pickerBox">
+        <div class="picker-selection-bar"></div>
+
+        <!-- 時間 -->
+        <div class="picker-col-container">
+          <div class="picker-viewport" id="viewportHours">
+            <div class="picker-wheel" id="wheelHours"></div>
+          </div>
+          <span class="picker-unit-label">時間</span>
+        </div>
+
+        <!-- 分 -->
+        <div class="picker-col-container">
+          <div class="picker-viewport" id="viewportMinutes">
+            <div class="picker-wheel" id="wheelMinutes"></div>
+          </div>
+          <span class="picker-unit-label">分</span>
+        </div>
+
+        <!-- 秒 -->
+        <div class="picker-col-container">
+          <div class="picker-viewport" id="viewportSeconds">
+            <div class="picker-wheel" id="wheelSeconds"></div>
+          </div>
+          <span class="picker-unit-label">秒</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 操作ボタン -->
+    <div class="buttons-wrapper">
+      <button class="control-btn primary" id="btnStart">スタート</button>
+      <button class="control-btn" id="btnReset">リセット</button>
+    </div>
+  </div>
+
+  <!-- 設定モーダルシート -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <span class="modal-title">設定</span>
+        <button class="modal-close-btn" id="btnCloseSettings">完了</button>
+      </div>
+
+      <div class="settings-list">
+        <!-- アラーム音選択 -->
+        <div class="setting-item">
+          <div class="setting-text-group">
+            <span class="setting-title">アラーム音</span>
+            <span class="setting-desc">終了時に鳴るトーン</span>
+          </div>
+          <div class="sound-select-box">
+            <select class="sound-select" id="soundSelect">
+              <option value="digital">デジタルビープ</option>
+              <option value="chime">チャイム (和音)</option>
+              <option value="signal">シグナル音</option>
+              <option value="bell">ソフトポーン</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 試聴プレビュートグル -->
+        <div class="setting-item">
+          <div class="setting-text-group">
+            <span class="setting-title">選択時の試聴</span>
+            <span class="setting-desc">音選択時のプレビュー再生</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="togglePreview" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <!-- テーマカラー -->
+        <div class="setting-item">
+          <div class="setting-text-group">
+            <span class="setting-title">テーマカラー</span>
+            <span class="setting-desc">ゲージとボタンの色</span>
+          </div>
+          <div class="color-presets" id="colorPresets">
+            <button class="color-btn active" style="background:#007aff;" data-color="#007aff"></button>
+            <button class="color-btn" style="background:#34c759;" data-color="#34c759"></button>
+            <button class="color-btn" style="background:#ff9500;" data-color="#ff9500"></button>
+            <button class="color-btn" style="background:#ff3b30;" data-color="#ff3b30"></button>
+            <button class="color-btn" style="background:#af52de;" data-color="#af52de"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- ローカルストレージ管理キー ---
+    const STORAGE_KEYS = {
+      SOUND: 'visual_timer_sound',
+      PREVIEW: 'visual_timer_preview',
+      COLOR: 'visual_timer_color'
+    };
+
+    const progressCircle = document.getElementById('progressCircle');
+    const timeDisplay = document.getElementById('timeDisplay');
+    const btnStart = document.getElementById('btnStart');
+    const btnReset = document.getElementById('btnReset');
+    const pickerBox = document.getElementById('pickerBox');
+    const gaugeWrapper = document.getElementById('gaugeWrapper');
+
+    const btnOpenSettings = document.getElementById('btnOpenSettings');
+    const btnCloseSettings = document.getElementById('btnCloseSettings');
+    const modalOverlay = document.getElementById('modalOverlay');
+    const soundSelect = document.getElementById('soundSelect');
+    const togglePreview = document.getElementById('togglePreview');
+    const colorPresets = document.getElementById('colorPresets');
+
+    const ITEM_HEIGHT = 44;
+    const RADIUS = 155;
+    const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+    progressCircle.style.strokeDasharray = `${CIRCUMFERENCE} ${CIRCUMFERENCE}`;
+    progressCircle.style.strokeDashoffset = '0';
+
+    let selectedH = 0;
+    let selectedM = 0;
+    let selectedS = 0;
+
+    let totalDurationMs = 0;
+    let remainingMs = 0;
+    let endTime = 0;
+    let timerId = null;
+    let isRunning = false;
+    let isAlarmLooping = false;
+    let alarmLoopInterval = null;
+
+    // --- 音声生成エンジン（Base64 WAV） ---
+    function createWavHeader(sampleRate, numSamples) {
+      const buffer = new Uint8Array(44 + numSamples * 2);
+      function writeStr(offset, str) {
+        for (let i = 0; i < str.length; i++) buffer[offset + i] = str.charCodeAt(i);
+      }
+      function write32(offset, val) {
+        buffer[offset] = val & 0xff;
+        buffer[offset + 1] = (val >> 8) & 0xff;
+        buffer[offset + 2] = (val >> 16) & 0xff;
+        buffer[offset + 3] = (val >> 24) & 0xff;
+      }
+      function write16(offset, val) {
+        buffer[offset] = val & 0xff;
+        buffer[offset + 1] = (val >> 8) & 0xff;
+      }
+
+      writeStr(0, 'RIFF');
+      write32(4, 36 + numSamples * 2);
+      writeStr(8, 'WAVE');
+      writeStr(12, 'fmt ');
+      write32(16, 16);
+      write16(20, 1);
+      write16(22, 1);
+      write32(24, sampleRate);
+      write32(28, sampleRate * 2);
+      write16(32, 2);
+      write16(34, 16);
+      writeStr(36, 'data');
+      write32(40, numSamples * 2);
+
+      return buffer;
+    }
+
+    function bufferToDataUrl(buffer) {
+      let binary = '';
+      const len = buffer.byteLength;
+      for (let i = 0; i < len; i++) binary += String.fromCharCode(buffer[i]);
+      return 'data:audio/wav;base64,' + btoa(binary);
+    }
+
+    const soundDefs = {
+      digital: {
+        loopInterval: 1200,
+        generate: () => {
+          const sr = 22050;
+          const dur = 1.0;
+          const n = Math.floor(sr * dur);
+          const buf = createWavHeader(sr, n);
+          for (let i = 0; i < n; i++) {
+            const t = i / sr;
+            let s = 0;
+            const pulse = t % 0.12;
+            const seq = Math.floor(t / 0.12);
+            if ((seq >= 0 && seq < 4) || (seq >= 5 && seq < 9)) {
+              if (pulse < 0.07) {
+                s = Math.sin(2 * Math.PI * 1174.66 * t) * 0.7;
+                s *= Math.exp(-pulse * 25);
+              }
+            }
+            const val = Math.max(-32768, Math.min(32767, Math.floor(s * 32767)));
+            buf[44 + i * 2] = val & 0xff;
+            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+          }
+          return bufferToDataUrl(buf);
+        }
+      },
+      chime: {
+        loopInterval: 1800,
+        generate: () => {
+          const sr = 22050;
+          const dur = 1.5;
+          const n = Math.floor(sr * dur);
+          const buf = createWavHeader(sr, n);
+          const notes = [
+            { freq: 523.25, time: 0.0 },
+            { freq: 659.25, time: 0.15 },
+            { freq: 783.99, time: 0.30 },
+            { freq: 1046.50, time: 0.45 }
+          ];
+          for (let i = 0; i < n; i++) {
+            const t = i / sr;
+            let s = 0;
+            notes.forEach(note => {
+              if (t >= note.time) {
+                const dt = t - note.time;
+                const tone = Math.sin(2 * Math.PI * note.freq * dt) * 0.5 +
+                             Math.sin(2 * Math.PI * (note.freq * 2.76) * dt) * 0.15;
+                s += tone * Math.exp(-dt * 4.5);
+              }
+            });
+            const val = Math.max(-32768, Math.min(32767, Math.floor(s * 25000)));
+            buf[44 + i * 2] = val & 0xff;
+            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+          }
+          return bufferToDataUrl(buf);
+        }
+      },
+      signal: {
+        loopInterval: 1100,
+        generate: () => {
+          const sr = 22050;
+          const dur = 0.9;
+          const n = Math.floor(sr * dur);
+          const buf = createWavHeader(sr, n);
+          for (let i = 0; i < n; i++) {
+            const t = i / sr;
+            let s = 0;
+            const cycle = t % 0.45;
+            if (cycle < 0.09) {
+              s = Math.sin(2 * Math.PI * 880 * t) * 0.7;
+            } else if (cycle >= 0.11 && cycle < 0.20) {
+              s = Math.sin(2 * Math.PI * 1318.51 * t) * 0.7;
+            }
+            const val = Math.max(-32768, Math.min(32767, Math.floor(s * 32767)));
+            buf[44 + i * 2] = val & 0xff;
+            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+          }
+          return bufferToDataUrl(buf);
+        }
+      },
+      bell: {
+        loopInterval: 1600,
+        generate: () => {
+          const sr = 22050;
+          const dur = 1.4;
+          const n = Math.floor(sr * dur);
+          const buf = createWavHeader(sr, n);
+          for (let i = 0; i < n; i++) {
+            const t = i / sr;
+            let s = Math.sin(2 * Math.PI * 659.25 * t) * 0.7 +
+                    Math.sin(2 * Math.PI * 1318.5 * t) * 0.2;
+            s *= Math.exp(-t * 2.8);
+            const val = Math.max(-32768, Math.min(32767, Math.floor(s * 32767)));
+            buf[44 + i * 2] = val & 0xff;
+            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+          }
+          return bufferToDataUrl(buf);
+        }
+      }
+    };
+
+    const audioElements = {};
+    Object.keys(soundDefs).forEach(key => {
+      const audio = new Audio(soundDefs[key].generate());
+      audio.preload = 'auto';
+      audioElements[key] = audio;
+    });
+
+    let currentSoundType = 'digital';
+    let isAudioUnlocked = false;
+
+    function primeAudio() {
+      if (!isAudioUnlocked) {
+        Object.values(audioElements).forEach(aud => {
+          aud.volume = 0.01;
+          aud.play().then(() => {
+            aud.pause();
+            aud.currentTime = 0;
+            aud.volume = 1.0;
+          }).catch(() => {});
+        });
+        isAudioUnlocked = true;
+      }
+    }
+
+    function playSingleSound() {
+      const target = audioElements[currentSoundType];
+      if (target) {
+        try {
+          target.currentTime = 0;
+          target.volume = 1.0;
+          target.play().catch(() => {});
+        } catch (e) {}
+      }
+    }
+
+    function startAlarmLoop() {
+      if (isAlarmLooping) return;
+      isAlarmLooping = true;
+      document.body.classList.add('alarm-active');
+
+      btnStart.textContent = 'アラーム停止';
+      btnStart.className = 'control-btn danger';
+
+      playSingleSound();
+      const interval = soundDefs[currentSoundType].loopInterval;
+      alarmLoopInterval = setInterval(playSingleSound, interval);
+    }
+
+    function stopAlarmLoop() {
+      if (!isAlarmLooping) return;
+      isAlarmLooping = false;
+      document.body.classList.remove('alarm-active');
+      document.body.classList.remove('is-running');
+      clearInterval(alarmLoopInterval);
+      alarmLoopInterval = null;
+
+      const target = audioElements[currentSoundType];
+      if (target) {
+        target.pause();
+        target.currentTime = 0;
+      }
+
+      btnStart.textContent = 'スタート';
+      btnStart.className = 'control-btn primary';
+
+      totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
+      remainingMs = totalDurationMs;
+      timeDisplay.textContent = formatTime(remainingMs);
+      updateGauge(1);
+    }
+
+    // --- 設定の保存と復元（localStorage） ---
+    function loadSavedSettings() {
+      // 1. サウンド
+      const savedSound = localStorage.getItem(STORAGE_KEYS.SOUND);
+      if (savedSound && soundDefs[savedSound]) {
+        currentSoundType = savedSound;
+        soundSelect.value = savedSound;
+      }
+
+      // 2. プレビュートグル
+      const savedPreview = localStorage.getItem(STORAGE_KEYS.PREVIEW);
+      if (savedPreview !== null) {
+        togglePreview.checked = savedPreview === 'true';
+      }
+
+      // 3. テーマカラー
+      const savedColor = localStorage.getItem(STORAGE_KEYS.COLOR);
+      if (savedColor) {
+        document.documentElement.style.setProperty('--primary-color', savedColor);
+        document.querySelectorAll('.color-btn').forEach(b => {
+          if (b.dataset.color.toLowerCase() === savedColor.toLowerCase()) {
+            b.classList.add('active');
+          } else {
+            b.classList.remove('active');
+          }
+        });
+      }
+    }
+
+    soundSelect.addEventListener('change', (e) => {
+      primeAudio();
+      currentSoundType = e.target.value;
+      localStorage.setItem(STORAGE_KEYS.SOUND, currentSoundType);
+      if (togglePreview.checked) {
+        setTimeout(playSingleSound, 50);
+      }
+    });
+
+    togglePreview.addEventListener('change', (e) => {
+      localStorage.setItem(STORAGE_KEYS.PREVIEW, e.target.checked);
+    });
+
+    colorPresets.addEventListener('click', (e) => {
+      const btn = e.target.closest('.color-btn');
+      if (!btn) return;
+      document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const color = btn.dataset.color;
+      document.documentElement.style.setProperty('--primary-color', color);
+      localStorage.setItem(STORAGE_KEYS.COLOR, color);
+    });
+
+    btnOpenSettings.addEventListener('click', () => {
+      modalOverlay.classList.add('open');
+    });
+
+    btnCloseSettings.addEventListener('click', () => {
+      modalOverlay.classList.remove('open');
+    });
+
+    modalOverlay.addEventListener('click', (e) => {
+      if (e.target === modalOverlay) {
+        modalOverlay.classList.remove('open');
+      }
+    });
+
+    // --- タッチドラムピッカー ---
+    class TouchDrumPicker {
+      constructor(viewportEl, wheelEl, maxVal, initialVal, onChange) {
+        this.viewport = viewportEl;
+        this.wheel = wheelEl;
+        this.maxVal = maxVal;
+        this.currentVal = initialVal;
+        this.onChange = onChange;
+
+        this.currentY = -initialVal * ITEM_HEIGHT;
+        this.startY = 0;
+        this.startTouchY = 0;
+        this.isDragging = false;
+        this.velocity = 0;
+        this.lastTouchY = 0;
+        this.lastTouchTime = 0;
+
+        this.renderCells();
+        this.applyTransform(this.currentY);
+        this.updateActiveCell();
+        this.bindEvents();
+      }
+
+      renderCells() {
+        const frag = document.createDocumentFragment();
+        for (let i = 0; i <= this.maxVal; i++) {
+          const cell = document.createElement('div');
+          cell.className = 'picker-cell';
+          cell.textContent = String(i).padStart(2, '0');
+          frag.appendChild(cell);
+        }
+        this.wheel.appendChild(frag);
+        this.cells = this.wheel.querySelectorAll('.picker-cell');
+      }
+
+      applyTransform(y) {
+        this.wheel.style.transform = `translate3d(0, ${y}px, 0)`;
+      }
+
+      updateActiveCell() {
+        const index = Math.max(0, Math.min(this.maxVal, Math.round(-this.currentY / ITEM_HEIGHT)));
+        this.cells.forEach((c, idx) => {
+          if (idx === index) {
+            c.classList.add('active');
+          } else {
+            c.classList.remove('active');
+          }
+        });
+        if (this.currentVal !== index) {
+          this.currentVal = index;
+          this.onChange(this.currentVal);
+        }
+      }
+
+      snapToNearest() {
+        const targetIndex = Math.max(0, Math.min(this.maxVal, Math.round(-this.currentY / ITEM_HEIGHT)));
+        const targetY = -targetIndex * ITEM_HEIGHT;
+
+        this.wheel.style.transition = 'transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1)';
+        this.currentY = targetY;
+        this.applyTransform(this.currentY);
+        this.updateActiveCell();
+
+        setTimeout(() => {
+          this.wheel.style.transition = '';
+        }, 250);
+      }
+
+      bindEvents() {
+        const onTouchStart = (e) => {
+          if (document.body.classList.contains('is-running')) return;
+          primeAudio();
+          this.isDragging = true;
+          this.wheel.style.transition = '';
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          this.startTouchY = clientY;
+          this.lastTouchY = clientY;
+          this.startY = this.currentY;
+          this.lastTouchTime = Date.now();
+          this.velocity = 0;
+        };
+
+        const onTouchMove = (e) => {
+          if (!this.isDragging) return;
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          const deltaY = clientY - this.startTouchY;
+          const now = Date.now();
+
+          let newY = this.startY + deltaY;
+          const minY = -this.maxVal * ITEM_HEIGHT;
+          const maxY = 0;
+          if (newY > maxY) {
+            newY = maxY + (newY - maxY) * 0.3;
+          } else if (newY < minY) {
+            newY = minY + (newY - minY) * 0.3;
+          }
+
+          const dt = now - this.lastTouchTime;
+          if (dt > 0) {
+            this.velocity = (clientY - this.lastTouchY) / dt;
+          }
+
+          this.lastTouchY = clientY;
+          this.lastTouchTime = now;
+          this.currentY = newY;
+          this.applyTransform(this.currentY);
+          this.updateActiveCell();
+        };
+
+        const onTouchEnd = () => {
+          if (!this.isDragging) return;
+          this.isDragging = false;
+
+          if (Math.abs(this.velocity) > 0.15) {
+            const momentumY = this.currentY + this.velocity * 120;
+            this.currentY = momentumY;
+          }
+          this.snapToNearest();
+        };
+
+        this.viewport.addEventListener('touchstart', onTouchStart, { passive: true });
+        window.addEventListener('touchmove', onTouchMove, { passive: true });
+        window.addEventListener('touchend', onTouchEnd, { passive: true });
+
+        this.viewport.addEventListener('mousedown', onTouchStart);
+        window.addEventListener('mousemove', onTouchMove);
+        window.addEventListener('mouseup', onTouchEnd);
+      }
+    }
+
+    const drumH = new TouchDrumPicker(
+      document.getElementById('viewportHours'),
+      document.getElementById('wheelHours'),
+      23,
+      selectedH,
+      (val) => { selectedH = val; onDurationChange(); }
+    );
+
+    const drumM = new TouchDrumPicker(
+      document.getElementById('viewportMinutes'),
+      document.getElementById('wheelMinutes'),
+      59,
+      selectedM,
+      (val) => { selectedM = val; onDurationChange(); }
+    );
+
+    const drumS = new TouchDrumPicker(
+      document.getElementById('viewportSeconds'),
+      document.getElementById('wheelSeconds'),
+      59,
+      selectedS,
+      (val) => { selectedS = val; onDurationChange(); }
+    );
+
+    function onDurationChange() {
+      if (!isRunning && !isAlarmLooping) {
+        totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
+        remainingMs = totalDurationMs;
+        timeDisplay.textContent = formatTime(remainingMs);
+        updateGauge(1);
+      }
+    }
+
+    function formatTime(ms) {
+      const totalSec = Math.ceil(ms / 1000);
+      const h = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+      const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+      const s = String(totalSec % 60).padStart(2, '0');
+      return `${h}:${m}:${s}`;
+    }
+
+    function updateGauge(ratio) {
+      const offset = CIRCUMFERENCE * (1 - Math.max(0, Math.min(1, ratio)));
+      progressCircle.style.strokeDashoffset = offset;
+    }
+
+    function tick() {
+      const now = Date.now();
+      remainingMs = Math.max(0, endTime - now);
+
+      timeDisplay.textContent = formatTime(remainingMs);
+      updateGauge(remainingMs / totalDurationMs);
+
+      if (remainingMs <= 0) {
+        clearInterval(timerId);
+        timerId = null;
+        isRunning = false;
+        startAlarmLoop();
+      }
+    }
+
+    // コントロールボタン
+    btnStart.addEventListener('click', () => {
+      primeAudio();
+
+      if (isAlarmLooping) {
+        stopAlarmLoop();
+        return;
+      }
+
+      if (!isRunning) {
+        if (remainingMs <= 0) {
+          totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
+          remainingMs = totalDurationMs;
+          if (totalDurationMs <= 0) return;
+        }
+
+        endTime = Date.now() + remainingMs;
+        timerId = setInterval(tick, 50);
+        isRunning = true;
+        
+        document.body.classList.add('is-running');
+        btnStart.textContent = '一時停止';
+        btnStart.className = 'control-btn';
+      } else {
+        clearInterval(timerId);
+        timerId = null;
+        isRunning = false;
+        
+        document.body.classList.remove('is-running');
+        btnStart.textContent = '再開';
+        btnStart.className = 'control-btn primary';
+      }
+    });
+
+    btnReset.addEventListener('click', () => {
+      if (isAlarmLooping) {
+        stopAlarmLoop();
+        return;
+      }
+
+      clearInterval(timerId);
+      timerId = null;
+      isRunning = false;
+      
+      document.body.classList.remove('is-running');
+      btnStart.textContent = 'スタート';
+      btnStart.className = 'control-btn primary';
+
+      totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
+      remainingMs = totalDurationMs;
+      timeDisplay.textContent = formatTime(remainingMs);
+      updateGauge(1);
+    });
+
+    gaugeWrapper.addEventListener('click', () => {
+      if (isAlarmLooping) {
+        stopAlarmLoop();
+      }
+    });
+
+    // 保存設定の読み込み＆初期化
+    loadSavedSettings();
+    onDurationChange();
+  </script>
+</body>
+</html>
