@@ -560,10 +560,18 @@
           </div>
           <div class="sound-select-box">
             <select class="sound-select" id="soundSelect">
-              <option value="digital">デジタルビープ</option>
-              <option value="chime">チャイム (和音)</option>
-              <option value="signal">シグナル音</option>
-              <option value="bell">ソフトポーン</option>
+              <optgroup label="定番アラーム">
+                <option value="digital">デジタルビープ</option>
+                <option value="chime">チャイム (和音)</option>
+                <option value="signal">シグナル音</option>
+                <option value="bell">ソフトポーン</option>
+              </optgroup>
+              <optgroup label="追加サウンド（ループ向け）">
+                <option value="schoolChime">スクールチャイム</option>
+                <option value="marimba">マリンバ</option>
+                <option value="calmBell">カームベル</option>
+                <option value="upbeat">アップビート</option>
+              </optgroup>
             </select>
           </div>
         </div>
@@ -597,7 +605,6 @@
   </div>
 
   <script>
-    // --- iPadOS / iOS Chrome & Safari対応のPNGアイコン動的生成 ---
     function setupAppleAndChromeIcon() {
       const canvas = document.createElement('canvas');
       canvas.width = 192;
@@ -645,7 +652,7 @@
     }
     setupAppleAndChromeIcon();
 
-    // --- Screen Wake Lock API 管理 ---
+    // --- Screen Wake Lock API ---
     let wakeLock = null;
 
     async function requestWakeLock() {
@@ -669,14 +676,12 @@
       }
     }
 
-    // タブ復帰時の自動再ロック
     document.addEventListener('visibilitychange', async () => {
       if (document.visibilityState === 'visible' && timerState === 'RUNNING') {
         await requestWakeLock();
       }
     });
 
-    // --- ローカルストレージキー ---
     const STORAGE_KEYS = {
       SOUND: 'visual_timer_sound',
       PREVIEW: 'visual_timer_preview',
@@ -712,7 +717,7 @@
     let endTime = 0;
     let timerId = null;
 
-    let timerState = 'IDLE'; // 'IDLE' | 'RUNNING' | 'PAUSED'
+    let timerState = 'IDLE';
 
     let isAlarmLooping = false;
     let alarmLoopInterval = null;
@@ -723,17 +728,17 @@
 
       if (state === 'RUNNING') {
         document.body.classList.add('state-running');
-        requestWakeLock(); // 動作中はスリープ防止
+        requestWakeLock();
       } else if (state === 'PAUSED') {
         document.body.classList.add('state-paused');
-        releaseWakeLock(); // 一時停止中はスリープロック解除
+        releaseWakeLock();
       } else {
         document.body.classList.add('state-idle');
-        releaseWakeLock(); // リセット・初期状態も解除
+        releaseWakeLock();
       }
     }
 
-    // --- 音声生成（Base64 WAV合成） ---
+    // --- 音声生成エンジン（Base64 WAV合成） ---
     function createWavHeader(sampleRate, numSamples) {
       const buffer = new Uint8Array(44 + numSamples * 2);
       function writeStr(offset, str) {
@@ -774,7 +779,9 @@
       return 'data:audio/wav;base64,' + btoa(binary);
     }
 
+    // --- サウンド定義（既存4種 ＋ 新規4種 = 計8種） ---
     const soundDefs = {
+      // 1. デジタルビープ
       digital: {
         loopInterval: 1200,
         generate: () => {
@@ -800,6 +807,8 @@
           return bufferToDataUrl(buf);
         }
       },
+
+      // 2. チャイム（和音）
       chime: {
         loopInterval: 1800,
         generate: () => {
@@ -831,6 +840,8 @@
           return bufferToDataUrl(buf);
         }
       },
+
+      // 3. シグナル音
       signal: {
         loopInterval: 1100,
         generate: () => {
@@ -854,6 +865,8 @@
           return bufferToDataUrl(buf);
         }
       },
+
+      // 4. ソフトポーン
       bell: {
         loopInterval: 1600,
         generate: () => {
@@ -867,6 +880,140 @@
                     Math.sin(2 * Math.PI * 1318.5 * t) * 0.2;
             s *= Math.exp(-t * 2.8);
             const val = Math.max(-32768, Math.min(32767, Math.floor(s * 32767)));
+            buf[44 + i * 2] = val & 0xff;
+            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+          }
+          return bufferToDataUrl(buf);
+        }
+      },
+
+      // 5. 【NEW】スクールチャイム（ウエストミンスター風 G4 -> E4 -> D4 -> G3）
+      schoolChime: {
+        loopInterval: 2400,
+        generate: () => {
+          const sr = 22050;
+          const dur = 2.2;
+          const n = Math.floor(sr * dur);
+          const buf = createWavHeader(sr, n);
+          const notes = [
+            { freq: 392.00, time: 0.00 }, // G4
+            { freq: 329.63, time: 0.45 }, // E4
+            { freq: 293.66, time: 0.90 }, // D4
+            { freq: 196.00, time: 1.35 }  // G3 (豊かな低音の締め)
+          ];
+          for (let i = 0; i < n; i++) {
+            const t = i / sr;
+            let s = 0;
+            notes.forEach(note => {
+              if (t >= note.time) {
+                const dt = t - note.time;
+                // 基音 + 2次倍音 + チャイム管の倍音（2.76倍）
+                const tone = Math.sin(2 * Math.PI * note.freq * dt) * 0.55 +
+                             Math.sin(2 * Math.PI * (note.freq * 2) * dt) * 0.18 +
+                             Math.sin(2 * Math.PI * (note.freq * 2.76) * dt) * 0.10;
+                s += tone * Math.exp(-dt * 3.2);
+              }
+            });
+            const val = Math.max(-32768, Math.min(32767, Math.floor(s * 23000)));
+            buf[44 + i * 2] = val & 0xff;
+            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+          }
+          return bufferToDataUrl(buf);
+        }
+      },
+
+      // 6. 【NEW】マリンバ（木琴の軽やかな分散和音 F4 -> A4 -> C5 -> E5）
+      marimba: {
+        loopInterval: 1400,
+        generate: () => {
+          const sr = 22050;
+          const dur = 1.2;
+          const n = Math.floor(sr * dur);
+          const buf = createWavHeader(sr, n);
+          const notes = [
+            { freq: 349.23, time: 0.00 }, // F4
+            { freq: 440.00, time: 0.12 }, // A4
+            { freq: 523.25, time: 0.24 }, // C5
+            { freq: 659.25, time: 0.36 }  // E5
+          ];
+          for (let i = 0; i < n; i++) {
+            const t = i / sr;
+            let s = 0;
+            notes.forEach(note => {
+              if (t >= note.time) {
+                const dt = t - note.time;
+                // 木質感を出す奇数倍音と素早いアタック減衰
+                const tone = Math.sin(2 * Math.PI * note.freq * dt) * 0.65 +
+                             Math.sin(2 * Math.PI * (note.freq * 3.0) * dt) * 0.20 +
+                             Math.sin(2 * Math.PI * (note.freq * 4.0) * dt) * 0.08;
+                s += tone * Math.exp(-dt * 7.5);
+              }
+            });
+            const val = Math.max(-32768, Math.min(32767, Math.floor(s * 25000)));
+            buf[44 + i * 2] = val & 0xff;
+            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+          }
+          return bufferToDataUrl(buf);
+        }
+      },
+
+      // 7. 【NEW】カームベル（落ち着いた和音の2打連打 C5 + G5）
+      calmBell: {
+        loopInterval: 2000,
+        generate: () => {
+          const sr = 22050;
+          const dur = 1.8;
+          const n = Math.floor(sr * dur);
+          const buf = createWavHeader(sr, n);
+          const strikes = [0.00, 0.40]; // 2回打音
+          for (let i = 0; i < n; i++) {
+            const t = i / sr;
+            let s = 0;
+            strikes.forEach(st => {
+              if (t >= st) {
+                const dt = t - st;
+                // 澄んだ完全5度の和音（523.25Hz + 783.99Hz）
+                const tone = Math.sin(2 * Math.PI * 523.25 * dt) * 0.45 +
+                             Math.sin(2 * Math.PI * 783.99 * dt) * 0.35 +
+                             Math.sin(2 * Math.PI * 1046.50 * dt) * 0.12;
+                s += tone * Math.exp(-dt * 3.0);
+              }
+            });
+            const val = Math.max(-32768, Math.min(32767, Math.floor(s * 24000)));
+            buf[44 + i * 2] = val & 0xff;
+            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+          }
+          return bufferToDataUrl(buf);
+        }
+      },
+
+      // 8. 【NEW】アップビート（明るいポップトーン C5 -> E5 -> G5）
+      upbeat: {
+        loopInterval: 1200,
+        generate: () => {
+          const sr = 22050;
+          const dur = 1.0;
+          const n = Math.floor(sr * dur);
+          const buf = createWavHeader(sr, n);
+          const notes = [
+            { freq: 523.25, time: 0.00 }, // C5
+            { freq: 659.25, time: 0.10 }, // E5
+            { freq: 783.99, time: 0.20 }  // G5
+          ];
+          for (let i = 0; i < n; i++) {
+            const t = i / sr;
+            let s = 0;
+            notes.forEach(note => {
+              if (t >= note.time) {
+                const dt = t - note.time;
+                // 明るい三角波ライクな合成
+                const tone = Math.sin(2 * Math.PI * note.freq * dt) * 0.6 +
+                             Math.sin(2 * Math.PI * (note.freq * 2) * dt) * 0.2 +
+                             Math.sin(2 * Math.PI * (note.freq * 3) * dt) * 0.1;
+                s += tone * Math.exp(-dt * 6.0);
+              }
+            });
+            const val = Math.max(-32768, Math.min(32767, Math.floor(s * 26000)));
             buf[44 + i * 2] = val & 0xff;
             buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
           }
@@ -1169,7 +1316,6 @@
       }
     }
 
-    // 時間表示フォーマット（1時間未満は「00:」を削り、フォントを特大化）
     function renderTimeAndGauge(ms, ratio) {
       const totalSec = Math.ceil(ms / 1000);
       const h = Math.floor(totalSec / 3600);
@@ -1179,7 +1325,6 @@
       const mStr = String(m).padStart(2, '0');
       const sStr = String(s).padStart(2, '0');
 
-      // 設定総時間が1時間未満（または残り時間が1時間未満で、設定自体も1時間未満）
       if (h === 0) {
         timeDisplay.textContent = `${mStr}:${sStr}`;
         timeDisplay.classList.add('compact-mode');
@@ -1189,7 +1334,6 @@
         timeDisplay.classList.remove('compact-mode');
       }
 
-      // ゲージの更新
       const offset = CIRCUMFERENCE * (1 - Math.max(0, Math.min(1, ratio)));
       progressCircle.style.strokeDashoffset = offset;
     }
@@ -1203,12 +1347,11 @@
       if (remainingMs <= 0) {
         clearInterval(timerId);
         timerId = null;
-        releaseWakeLock(); // 終了時はスリープロックを解除
+        releaseWakeLock();
         startAlarmLoop();
       }
     }
 
-    // スタート / 一時停止 / 再開 ボタン
     btnStart.addEventListener('click', () => {
       primeAudio();
 
@@ -1244,7 +1387,6 @@
       }
     });
 
-    // リセットボタン
     btnReset.addEventListener('click', () => {
       if (isAlarmLooping) {
         stopAlarmLoop();
