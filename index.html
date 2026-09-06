@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Visual Timer</title>
   
-  <!-- iPadOS / iOS / Chrome対応：起動時にJSからPNG形式のアイコンを動的挿入 -->
   <link id="dynamicFavicon" rel="icon" type="image/png">
   <link id="dynamicAppleIcon" rel="apple-touch-icon">
 
@@ -81,7 +80,7 @@
       opacity: 0.35;
     }
 
-    /* 中央メインステージ（ドラムロール ⇄ 特大円形ゲージ） */
+    /* 中央メインステージ */
     .main-stage {
       flex: 1;
       width: 100%;
@@ -93,7 +92,7 @@
       overflow: hidden;
     }
 
-    /* 円形ゲージコンテナ（RUNNINGおよびPAUSEDで画面いっぱいに表示） */
+    /* 円形ゲージコンテナ */
     .gauge-wrapper {
       position: absolute;
       width: min(88vw, calc(100vh - 210px));
@@ -110,7 +109,6 @@
       transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* 動作中 または 一時停止中 は円ゲージを表示！ */
     body.state-running .gauge-wrapper,
     body.state-paused .gauge-wrapper {
       opacity: 1;
@@ -150,15 +148,24 @@
       animation: pulseAlarm 0.8s infinite ease-in-out;
     }
 
+    /* デジタル時間表示（標準: HH:MM:SS） */
     .time-display {
       position: absolute;
-      font-size: clamp(3rem, 11vw, 5.8rem);
+      font-size: clamp(2.8rem, 9.5vw, 5rem);
       font-weight: 300;
       font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
+      transition: font-size 0.3s ease;
     }
 
-    /* 中央ドラムピッカー（初期IDLE時のみ表示） */
+    /* 1時間未満の特大表示（MM:SS） */
+    .time-display.compact-mode {
+      font-size: clamp(3.8rem, 14vw, 7.5rem);
+      font-weight: 300;
+      letter-spacing: -0.03em;
+    }
+
+    /* 中央ドラムピッカー */
     .picker-box {
       position: relative;
       width: 100%;
@@ -178,7 +185,6 @@
       transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* 動作中・一時停止中はピッカーを隠す */
     body.state-running .picker-box,
     body.state-paused .picker-box {
       opacity: 0;
@@ -249,7 +255,7 @@
       pointer-events: none;
     }
 
-    /* 下部固定ボタン群（位置不動） */
+    /* 下部固定ボタンバー */
     .bottom-bar {
       width: 100%;
       max-width: 440px;
@@ -481,7 +487,6 @@
 </head>
 <body class="state-idle">
 
-  <!-- 上部設定バー -->
   <div class="top-bar">
     <button class="icon-btn" id="btnOpenSettings" aria-label="設定">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -491,9 +496,8 @@
     </button>
   </div>
 
-  <!-- 中央メインステージ（ドラムロール ⇄ 特大円形ゲージ） -->
   <div class="main-stage">
-    <!-- ドラムピッカー（IDLE状態のときのみ表示） -->
+    <!-- ドラムピッカー -->
     <div class="picker-box" id="pickerBox">
       <div class="picker-selection-bar"></div>
 
@@ -522,17 +526,17 @@
       </div>
     </div>
 
-    <!-- 特大円形ゲージ（RUNNINGおよびPAUSEDのときに表示） -->
+    <!-- 特大円形ゲージ -->
     <div class="gauge-wrapper" id="gaugeWrapper">
       <svg class="gauge-svg" viewBox="0 0 360 360">
         <circle class="gauge-track" cx="180" cy="180" r="155"></circle>
         <circle class="gauge-progress" id="progressCircle" cx="180" cy="180" r="155"></circle>
       </svg>
-      <div class="time-display" id="timeDisplay">00:00:00</div>
+      <div class="time-display" id="timeDisplay">00:00</div>
     </div>
   </div>
 
-  <!-- 下部固定ボタンバー（位置不動） -->
+  <!-- 下部固定ボタンバー -->
   <div class="bottom-bar">
     <div class="buttons-wrapper">
       <button class="control-btn primary" id="btnStart">スタート</button>
@@ -549,7 +553,6 @@
       </div>
 
       <div class="settings-list">
-        <!-- アラーム音選択 -->
         <div class="setting-item">
           <div class="setting-text-group">
             <span class="setting-title">アラーム音</span>
@@ -565,7 +568,6 @@
           </div>
         </div>
 
-        <!-- 試聴プレビュートグル -->
         <div class="setting-item">
           <div class="setting-text-group">
             <span class="setting-title">選択時の試聴</span>
@@ -577,7 +579,6 @@
           </label>
         </div>
 
-        <!-- テーマカラー -->
         <div class="setting-item">
           <div class="setting-text-group">
             <span class="setting-title">テーマカラー</span>
@@ -603,7 +604,6 @@
       canvas.height = 192;
       const ctx = canvas.getContext('2d');
 
-      // 背景（ダークグレー・角丸スクエア）
       ctx.fillStyle = '#1c1c1e';
       const r = 40;
       ctx.beginPath();
@@ -619,26 +619,21 @@
       ctx.closePath();
       ctx.fill();
 
-      // 時計の外周サークル
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 14;
       ctx.beginPath();
       ctx.arc(96, 96, 68, 0, Math.PI * 2);
       ctx.stroke();
 
-      // 時計の針（短針・長針）
       ctx.lineWidth = 12;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      // 短針 (12時方向)
       ctx.moveTo(96, 96);
       ctx.lineTo(96, 52);
-      // 長針 (3時方向)
       ctx.moveTo(96, 96);
       ctx.lineTo(134, 96);
       ctx.stroke();
 
-      // 中心点
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(96, 96, 8, 0, Math.PI * 2);
@@ -649,6 +644,37 @@
       document.getElementById('dynamicAppleIcon').href = pngUrl;
     }
     setupAppleAndChromeIcon();
+
+    // --- Screen Wake Lock API 管理 ---
+    let wakeLock = null;
+
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => {
+            wakeLock = null;
+          });
+        } catch (err) {
+          console.warn('Wake Lock request failed:', err);
+        }
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock) {
+        wakeLock.release().then(() => {
+          wakeLock = null;
+        }).catch(() => {});
+      }
+    }
+
+    // タブ復帰時の自動再ロック
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible' && timerState === 'RUNNING') {
+        await requestWakeLock();
+      }
+    });
 
     // --- ローカルストレージキー ---
     const STORAGE_KEYS = {
@@ -686,8 +712,7 @@
     let endTime = 0;
     let timerId = null;
 
-    // 状態管理: 'IDLE' (設定中) | 'RUNNING' (動作中) | 'PAUSED' (一時停止中)
-    let timerState = 'IDLE';
+    let timerState = 'IDLE'; // 'IDLE' | 'RUNNING' | 'PAUSED'
 
     let isAlarmLooping = false;
     let alarmLoopInterval = null;
@@ -698,14 +723,17 @@
 
       if (state === 'RUNNING') {
         document.body.classList.add('state-running');
+        requestWakeLock(); // 動作中はスリープ防止
       } else if (state === 'PAUSED') {
         document.body.classList.add('state-paused');
+        releaseWakeLock(); // 一時停止中はスリープロック解除
       } else {
         document.body.classList.add('state-idle');
+        releaseWakeLock(); // リセット・初期状態も解除
       }
     }
 
-    // --- 音声生成エンジン（Base64 WAV合成） ---
+    // --- 音声生成（Base64 WAV合成） ---
     function createWavHeader(sampleRate, numSamples) {
       const buffer = new Uint8Array(44 + numSamples * 2);
       function writeStr(offset, str) {
@@ -914,8 +942,7 @@
 
       totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
       remainingMs = totalDurationMs;
-      timeDisplay.textContent = formatTime(remainingMs);
-      updateGauge(1);
+      renderTimeAndGauge(remainingMs, 1);
     }
 
     function loadSavedSettings() {
@@ -1138,20 +1165,31 @@
       if (timerState === 'IDLE' && !isAlarmLooping) {
         totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
         remainingMs = totalDurationMs;
-        timeDisplay.textContent = formatTime(remainingMs);
-        updateGauge(1);
+        renderTimeAndGauge(remainingMs, 1);
       }
     }
 
-    function formatTime(ms) {
+    // 時間表示フォーマット（1時間未満は「00:」を削り、フォントを特大化）
+    function renderTimeAndGauge(ms, ratio) {
       const totalSec = Math.ceil(ms / 1000);
-      const h = String(Math.floor(totalSec / 3600)).padStart(2, '0');
-      const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
-      const s = String(totalSec % 60).padStart(2, '0');
-      return `${h}:${m}:${s}`;
-    }
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
 
-    function updateGauge(ratio) {
+      const mStr = String(m).padStart(2, '0');
+      const sStr = String(s).padStart(2, '0');
+
+      // 設定総時間が1時間未満（または残り時間が1時間未満で、設定自体も1時間未満）
+      if (h === 0) {
+        timeDisplay.textContent = `${mStr}:${sStr}`;
+        timeDisplay.classList.add('compact-mode');
+      } else {
+        const hStr = String(h).padStart(2, '0');
+        timeDisplay.textContent = `${hStr}:${mStr}:${sStr}`;
+        timeDisplay.classList.remove('compact-mode');
+      }
+
+      // ゲージの更新
       const offset = CIRCUMFERENCE * (1 - Math.max(0, Math.min(1, ratio)));
       progressCircle.style.strokeDashoffset = offset;
     }
@@ -1160,12 +1198,12 @@
       const now = Date.now();
       remainingMs = Math.max(0, endTime - now);
 
-      timeDisplay.textContent = formatTime(remainingMs);
-      updateGauge(remainingMs / totalDurationMs);
+      renderTimeAndGauge(remainingMs, remainingMs / totalDurationMs);
 
       if (remainingMs <= 0) {
         clearInterval(timerId);
         timerId = null;
+        releaseWakeLock(); // 終了時はスリープロックを解除
         startAlarmLoop();
       }
     }
@@ -1180,7 +1218,6 @@
       }
 
       if (timerState === 'IDLE') {
-        // 設定モードからのスタート
         if (remainingMs <= 0) {
           totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
           remainingMs = totalDurationMs;
@@ -1193,14 +1230,12 @@
         btnStart.textContent = '一時停止';
         btnStart.className = 'control-btn';
       } else if (timerState === 'RUNNING') {
-        // 動作中からの一時停止（※円ゲージはそのまま維持！）
         clearInterval(timerId);
         timerId = null;
         setTimerState('PAUSED');
         btnStart.textContent = '再開';
         btnStart.className = 'control-btn primary';
       } else if (timerState === 'PAUSED') {
-        // 一時停止からの再開
         endTime = Date.now() + remainingMs;
         timerId = setInterval(tick, 50);
         setTimerState('RUNNING');
@@ -1209,7 +1244,7 @@
       }
     });
 
-    // リセットボタン（設定用ドラムロールへ完全復帰）
+    // リセットボタン
     btnReset.addEventListener('click', () => {
       if (isAlarmLooping) {
         stopAlarmLoop();
@@ -1219,15 +1254,13 @@
       clearInterval(timerId);
       timerId = null;
 
-      // IDLE状態へ戻してドラムロールを再表示
       setTimerState('IDLE');
       btnStart.textContent = 'スタート';
       btnStart.className = 'control-btn primary';
 
       totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
       remainingMs = totalDurationMs;
-      timeDisplay.textContent = formatTime(remainingMs);
-      updateGauge(1);
+      renderTimeAndGauge(remainingMs, 1);
     });
 
     gaugeWrapper.addEventListener('click', () => {
