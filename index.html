@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Visual Timer</title>
   
-  <!-- 時計アイコン -->
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%231c1c1e' stroke='%23ffffff' stroke-width='5'/%3E%3Cline x1='32' y1='32' x2='32' y2='16' stroke='%23ffffff' stroke-width='4' stroke-linecap='round'/%3E%3Cline x1='32' y1='32' x2='44' y2='32' stroke='%23ffffff' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='32' r='3' fill='%23ffffff'/%3E%3C/svg%3E">
+  <!-- iPadOS / iOS / Chrome対応：起動時にJSからPNG形式のアイコンを動的挿入 -->
+  <link id="dynamicFavicon" rel="icon" type="image/png">
+  <link id="dynamicAppleIcon" rel="apple-touch-icon">
 
   <style>
     :root {
@@ -46,7 +47,7 @@
       position: relative;
     }
 
-    /* 上部バー（設定ボタン） */
+    /* 上部設定バー */
     .top-bar {
       width: 100%;
       max-width: 600px;
@@ -76,11 +77,11 @@
       transform: scale(0.92);
     }
 
-    body.is-running .icon-btn {
-      opacity: 0.3;
+    body.state-running .icon-btn {
+      opacity: 0.35;
     }
 
-    /* 中央メインワークスペース（円ゲージまたはピッカー） */
+    /* 中央メインステージ（ドラムロール ⇄ 特大円形ゲージ） */
     .main-stage {
       flex: 1;
       width: 100%;
@@ -92,7 +93,7 @@
       overflow: hidden;
     }
 
-    /* 円形ゲージコンテナ：初期状態は非表示 */
+    /* 円形ゲージコンテナ（RUNNINGおよびPAUSEDで画面いっぱいに表示） */
     .gauge-wrapper {
       position: absolute;
       width: min(88vw, calc(100vh - 210px));
@@ -109,7 +110,9 @@
       transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    body.is-running .gauge-wrapper {
+    /* 動作中 または 一時停止中 は円ゲージを表示！ */
+    body.state-running .gauge-wrapper,
+    body.state-paused .gauge-wrapper {
       opacity: 1;
       pointer-events: auto;
       transform: scale(1);
@@ -155,7 +158,7 @@
       letter-spacing: -0.02em;
     }
 
-    /* 中央ドラムピッカー：タイマー稼働中は非表示 */
+    /* 中央ドラムピッカー（初期IDLE時のみ表示） */
     .picker-box {
       position: relative;
       width: 100%;
@@ -175,7 +178,9 @@
       transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    body.is-running .picker-box {
+    /* 動作中・一時停止中はピッカーを隠す */
+    body.state-running .picker-box,
+    body.state-paused .picker-box {
       opacity: 0;
       pointer-events: none;
       transform: scale(0.92);
@@ -244,7 +249,7 @@
       pointer-events: none;
     }
 
-    /* 下部固定ボタン群（稼働時・停止時で位置不動） */
+    /* 下部固定ボタン群（位置不動） */
     .bottom-bar {
       width: 100%;
       max-width: 440px;
@@ -474,7 +479,7 @@
     }
   </style>
 </head>
-<body>
+<body class="state-idle">
 
   <!-- 上部設定バー -->
   <div class="top-bar">
@@ -486,9 +491,9 @@
     </button>
   </div>
 
-  <!-- 中央メインワークスペース（ドラムロール ⇄ 特大円形ゲージ） -->
+  <!-- 中央メインステージ（ドラムロール ⇄ 特大円形ゲージ） -->
   <div class="main-stage">
-    <!-- ドラムピッカー（設定中・停止中に画面中央へ配置） -->
+    <!-- ドラムピッカー（IDLE状態のときのみ表示） -->
     <div class="picker-box" id="pickerBox">
       <div class="picker-selection-bar"></div>
 
@@ -517,7 +522,7 @@
       </div>
     </div>
 
-    <!-- 特大円形ゲージ（タイマー稼働中に画面の最大領域で展開） -->
+    <!-- 特大円形ゲージ（RUNNINGおよびPAUSEDのときに表示） -->
     <div class="gauge-wrapper" id="gaugeWrapper">
       <svg class="gauge-svg" viewBox="0 0 360 360">
         <circle class="gauge-track" cx="180" cy="180" r="155"></circle>
@@ -527,7 +532,7 @@
     </div>
   </div>
 
-  <!-- 下部固定ボタンバー（稼働中も位置不動） -->
+  <!-- 下部固定ボタンバー（位置不動） -->
   <div class="bottom-bar">
     <div class="buttons-wrapper">
       <button class="control-btn primary" id="btnStart">スタート</button>
@@ -591,6 +596,61 @@
   </div>
 
   <script>
+    // --- iPadOS / iOS Chrome & Safari対応のPNGアイコン動的生成 ---
+    function setupAppleAndChromeIcon() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 192;
+      canvas.height = 192;
+      const ctx = canvas.getContext('2d');
+
+      // 背景（ダークグレー・角丸スクエア）
+      ctx.fillStyle = '#1c1c1e';
+      const r = 40;
+      ctx.beginPath();
+      ctx.moveTo(r, 0);
+      ctx.lineTo(192 - r, 0);
+      ctx.quadraticCurveTo(192, 0, 192, r);
+      ctx.lineTo(192, 192 - r);
+      ctx.quadraticCurveTo(192, 192, 192 - r, 192);
+      ctx.lineTo(r, 192);
+      ctx.quadraticCurveTo(0, 192, 0, 192 - r);
+      ctx.lineTo(0, r);
+      ctx.quadraticCurveTo(0, 0, r, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // 時計の外周サークル
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 14;
+      ctx.beginPath();
+      ctx.arc(96, 96, 68, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 時計の針（短針・長針）
+      ctx.lineWidth = 12;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      // 短針 (12時方向)
+      ctx.moveTo(96, 96);
+      ctx.lineTo(96, 52);
+      // 長針 (3時方向)
+      ctx.moveTo(96, 96);
+      ctx.lineTo(134, 96);
+      ctx.stroke();
+
+      // 中心点
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(96, 96, 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      const pngUrl = canvas.toDataURL('image/png');
+      document.getElementById('dynamicFavicon').href = pngUrl;
+      document.getElementById('dynamicAppleIcon').href = pngUrl;
+    }
+    setupAppleAndChromeIcon();
+
+    // --- ローカルストレージキー ---
     const STORAGE_KEYS = {
       SOUND: 'visual_timer_sound',
       PREVIEW: 'visual_timer_preview',
@@ -625,9 +685,25 @@
     let remainingMs = 0;
     let endTime = 0;
     let timerId = null;
-    let isRunning = false;
+
+    // 状態管理: 'IDLE' (設定中) | 'RUNNING' (動作中) | 'PAUSED' (一時停止中)
+    let timerState = 'IDLE';
+
     let isAlarmLooping = false;
     let alarmLoopInterval = null;
+
+    function setTimerState(state) {
+      timerState = state;
+      document.body.classList.remove('state-idle', 'state-running', 'state-paused');
+
+      if (state === 'RUNNING') {
+        document.body.classList.add('state-running');
+      } else if (state === 'PAUSED') {
+        document.body.classList.add('state-paused');
+      } else {
+        document.body.classList.add('state-idle');
+      }
+    }
 
     // --- 音声生成エンジン（Base64 WAV合成） ---
     function createWavHeader(sampleRate, numSamples) {
@@ -823,7 +899,7 @@
       if (!isAlarmLooping) return;
       isAlarmLooping = false;
       document.body.classList.remove('alarm-active');
-      document.body.classList.remove('is-running');
+      setTimerState('IDLE');
       clearInterval(alarmLoopInterval);
       alarmLoopInterval = null;
 
@@ -974,7 +1050,7 @@
 
       bindEvents() {
         const onTouchStart = (e) => {
-          if (document.body.classList.contains('is-running')) return;
+          if (timerState !== 'IDLE') return;
           primeAudio();
           this.isDragging = true;
           this.wheel.style.transition = '';
@@ -1059,7 +1135,7 @@
     );
 
     function onDurationChange() {
-      if (!isRunning && !isAlarmLooping) {
+      if (timerState === 'IDLE' && !isAlarmLooping) {
         totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
         remainingMs = totalDurationMs;
         timeDisplay.textContent = formatTime(remainingMs);
@@ -1090,11 +1166,11 @@
       if (remainingMs <= 0) {
         clearInterval(timerId);
         timerId = null;
-        isRunning = false;
         startAlarmLoop();
       }
     }
 
+    // スタート / 一時停止 / 再開 ボタン
     btnStart.addEventListener('click', () => {
       primeAudio();
 
@@ -1103,7 +1179,8 @@
         return;
       }
 
-      if (!isRunning) {
+      if (timerState === 'IDLE') {
+        // 設定モードからのスタート
         if (remainingMs <= 0) {
           totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
           remainingMs = totalDurationMs;
@@ -1112,22 +1189,27 @@
 
         endTime = Date.now() + remainingMs;
         timerId = setInterval(tick, 50);
-        isRunning = true;
-        
-        document.body.classList.add('is-running');
+        setTimerState('RUNNING');
         btnStart.textContent = '一時停止';
         btnStart.className = 'control-btn';
-      } else {
+      } else if (timerState === 'RUNNING') {
+        // 動作中からの一時停止（※円ゲージはそのまま維持！）
         clearInterval(timerId);
         timerId = null;
-        isRunning = false;
-        
-        document.body.classList.remove('is-running');
+        setTimerState('PAUSED');
         btnStart.textContent = '再開';
         btnStart.className = 'control-btn primary';
+      } else if (timerState === 'PAUSED') {
+        // 一時停止からの再開
+        endTime = Date.now() + remainingMs;
+        timerId = setInterval(tick, 50);
+        setTimerState('RUNNING');
+        btnStart.textContent = '一時停止';
+        btnStart.className = 'control-btn';
       }
     });
 
+    // リセットボタン（設定用ドラムロールへ完全復帰）
     btnReset.addEventListener('click', () => {
       if (isAlarmLooping) {
         stopAlarmLoop();
@@ -1136,9 +1218,9 @@
 
       clearInterval(timerId);
       timerId = null;
-      isRunning = false;
-      
-      document.body.classList.remove('is-running');
+
+      // IDLE状態へ戻してドラムロールを再表示
+      setTimerState('IDLE');
       btnStart.textContent = 'スタート';
       btnStart.className = 'control-btn primary';
 
