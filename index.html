@@ -5,14 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Visual Timer</title>
   
-  <!-- iPadOS / iOS WebApp (PWA) 専用メタタグ -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Timer">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#000000">
 
-  <!-- アイコン -->
   <link id="dynamicFavicon" rel="icon" type="image/png">
   <link id="dynamicAppleIcon" rel="apple-touch-icon">
 
@@ -38,7 +36,7 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    html {
+    html, body {
       width: 100%;
       height: 100%;
       background-color: var(--bg-color);
@@ -46,23 +44,13 @@
     }
 
     body {
-      width: 100%;
-      height: 100%;
-      background-color: var(--bg-color);
       color: var(--text-color);
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: space-between;
-      /* WebApp特有のステータスバー・ホームバー余白に対応 */
       padding: calc(12px + env(safe-area-inset-top, 0px)) 20px calc(16px + env(safe-area-inset-bottom, 0px));
-      position: fixed; /* WebAppモードでのバウンスやスクロールズレを完全防止 */
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      overflow: hidden;
     }
 
     /* 上部バー */
@@ -105,32 +93,27 @@
       flex: 1;
       width: 100%;
       max-width: 600px;
-      display: grid;
-      place-items: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       position: relative;
       min-height: 0;
     }
 
-    /* 円形ゲージコンテナ */
+    /* 円形ゲージコンテナ：初期状態は display: none で完全に隠し、起動時の飛び出しを根絶 */
     .gauge-wrapper {
-      grid-area: 1 / 1;
-      width: min(80vw, 48vh, 480px);
-      height: min(80vw, 48vh, 480px);
-      display: flex;
+      display: none;
+      width: min(80vw, 50vh, 480px);
+      height: min(80vw, 50vh, 480px);
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      opacity: 0;
-      pointer-events: none;
-      transform: scale(0.94);
-      transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
     }
 
     body.state-running .gauge-wrapper,
     body.state-paused .gauge-wrapper {
-      opacity: 1;
-      pointer-events: auto;
-      transform: scale(1);
+      display: flex;
     }
 
     .gauge-svg {
@@ -171,7 +154,6 @@
       font-weight: 300;
       font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
-      transition: font-size 0.2s ease;
     }
 
     .time-display.compact-mode {
@@ -180,31 +162,25 @@
       letter-spacing: -0.03em;
     }
 
-    /* 中央ドラムピッカー */
+    /* 中央ドラムピッカー：タイマー稼働中は完全に非表示 */
     .picker-box {
-      grid-area: 1 / 1;
-      position: relative;
+      display: flex;
       width: 100%;
       max-width: 420px;
       height: calc(var(--item-height) * 5);
       background: var(--surface-color);
       border-radius: 24px;
       overflow: hidden;
-      display: flex;
       align-items: center;
       justify-content: space-around;
       padding: 0 16px;
       box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
-      opacity: 1;
-      transform: scale(1);
-      transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
     }
 
     body.state-running .picker-box,
     body.state-paused .picker-box {
-      opacity: 0;
-      pointer-events: none;
-      transform: scale(0.94);
+      display: none;
     }
 
     .picker-selection-bar {
@@ -621,7 +597,6 @@
   </div>
 
   <script>
-    // --- 時計アイコン生成 ---
     (function setupIcons() {
       const canvas = document.createElement('canvas');
       canvas.width = 192;
@@ -661,7 +636,6 @@
       document.getElementById('dynamicAppleIcon').href = url;
     })();
 
-    // --- Screen Wake Lock ---
     let wakeLock = null;
     async function requestWakeLock() {
       if ('wakeLock' in navigator) {
@@ -682,7 +656,6 @@
       }
     });
 
-    // --- DOM要素 ---
     const progressCircle = document.getElementById('progressCircle');
     const timeDisplay = document.getElementById('timeDisplay');
     const btnStart = document.getElementById('btnStart');
@@ -702,10 +675,6 @@
 
     progressCircle.style.strokeDasharray = `${CIRCUMFERENCE} ${CIRCUMFERENCE}`;
     progressCircle.style.strokeDashoffset = '0';
-
-    let selectedH = 0;
-    let selectedM = 0;
-    let selectedS = 0;
 
     let totalDurationMs = 0;
     let remainingMs = 0;
@@ -731,7 +700,6 @@
       }
     }
 
-    // --- 音声生成エンジン ---
     function createWavHeader(sampleRate, numSamples) {
       const buffer = new Uint8Array(44 + numSamples * 2);
       function writeStr(offset, str) { for (let i = 0; i < str.length; i++) buffer[offset + i] = str.charCodeAt(i); }
@@ -824,7 +792,7 @@
             notes.forEach(note => {
               if (curT >= note.t) {
                 const dt = curT - note.t;
-                const tone = Math.sin(2 * Math.PI * note.f * dt) * 0.55 + Math.sin(2 * Math.PI * (note.f * 2.76) * dt) * 0.10;
+                const tone = Math.sin(2 * Math.PI * note.f * dt) * 0.55 + Math.sin(2 * Math.PI * (note.f * 2) * dt) * 0.18 + Math.sin(2 * Math.PI * (note.f * 2.76) * dt) * 0.10;
                 s += tone * Math.exp(-dt * 3.2);
               }
             });
@@ -911,7 +879,6 @@
 
     function playActiveAlarm() {
       try {
-        globalAudio.pause();
         globalAudio.src = getSoundDataUrl(currentSoundType);
         globalAudio.currentTime = 0;
         globalAudio.volume = 1.0;
@@ -946,9 +913,7 @@
       btnStart.textContent = 'スタート';
       btnStart.className = 'control-btn primary';
 
-      totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
-      remainingMs = totalDurationMs;
-      renderTimeAndGauge(remainingMs, 1);
+      renderTimeAndGauge(getCalculatedDurationMs(), 1);
     }
 
     function loadSavedSettings() {
@@ -1006,14 +971,13 @@
 
     // --- ドラムピッカーコントローラー ---
     class TouchDrumPicker {
-      constructor(containerEl, wheelEl, maxVal, initialVal, onChange) {
+      constructor(containerEl, wheelEl, maxVal) {
         this.container = containerEl;
         this.wheel = wheelEl;
         this.maxVal = maxVal;
-        this.currentVal = initialVal;
-        this.onChange = onChange;
+        this.currentVal = 0;
 
-        this.currentY = -initialVal * ITEM_HEIGHT;
+        this.currentY = 0;
         this.startY = 0;
         this.startTouchY = 0;
         this.isDragging = false;
@@ -1023,7 +987,7 @@
         this.wheelScrollTimeout = null;
 
         this.renderCells();
-        this.applyTransform(this.currentY);
+        this.applyTransform(0);
         this.updateActiveCell();
         this.bindEvents();
       }
@@ -1051,7 +1015,6 @@
           else c.classList.remove('active');
         });
         this.currentVal = index;
-        this.onChange(this.currentVal);
       }
 
       snapToNearest() {
@@ -1119,7 +1082,7 @@
         this.container.addEventListener('touchend', onTouchEnd, { passive: true });
         this.container.addEventListener('touchcancel', onTouchEnd, { passive: true });
 
-        // PCマウス操作
+        // PCマウス
         const onMouseDown = (e) => {
           if (timerState !== 'IDLE') return;
           this.isDragging = true;
@@ -1192,36 +1155,15 @@
       }
     }
 
-    const drumH = new TouchDrumPicker(
-      document.getElementById('containerHours'),
-      document.getElementById('wheelHours'),
-      23,
-      selectedH,
-      (val) => { selectedH = val; onDurationChange(); }
-    );
+    const drumH = new TouchDrumPicker(document.getElementById('containerHours'), document.getElementById('wheelHours'), 23);
+    const drumM = new TouchDrumPicker(document.getElementById('containerMinutes'), document.getElementById('wheelMinutes'), 59);
+    const drumS = new TouchDrumPicker(document.getElementById('containerSeconds'), document.getElementById('wheelSeconds'), 59);
 
-    const drumM = new TouchDrumPicker(
-      document.getElementById('containerMinutes'),
-      document.getElementById('wheelMinutes'),
-      59,
-      selectedM,
-      (val) => { selectedM = val; onDurationChange(); }
-    );
-
-    const drumS = new TouchDrumPicker(
-      document.getElementById('containerSeconds'),
-      document.getElementById('wheelSeconds'),
-      59,
-      selectedS,
-      (val) => { selectedS = val; onDurationChange(); }
-    );
-
-    function onDurationChange() {
-      if (timerState === 'IDLE' && !isAlarmLooping) {
-        totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
-        remainingMs = totalDurationMs;
-        renderTimeAndGauge(remainingMs, 1);
-      }
+    function getCalculatedDurationMs() {
+      const h = drumH.currentVal;
+      const m = drumM.currentVal;
+      const s = drumS.currentVal;
+      return (h * 3600 + m * 60 + s) * 1000;
     }
 
     function renderTimeAndGauge(ms, ratio) {
@@ -1260,40 +1202,26 @@
       }
     }
 
-    // --- スタートボタン（確実な始動） ---
+    // --- スタートボタン（確実に始動） ---
     btnStart.addEventListener('click', () => {
-      // 安全なアンロック（例外で後続処理を止めない）
-      try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (AudioCtx) {
-          const dummyCtx = new AudioCtx();
-          if (dummyCtx.state === 'suspended') {
-            dummyCtx.resume();
-          }
-        }
-      } catch (e) {}
-
       if (isAlarmLooping) {
         stopAlarmLoop();
         return;
       }
 
       if (timerState === 'IDLE') {
-        // 現在のピッカー選択値を確実に強制同期
-        selectedH = drumH.currentVal;
-        selectedM = drumM.currentVal;
-        selectedS = drumS.currentVal;
-        totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
+        totalDurationMs = getCalculatedDurationMs();
         remainingMs = totalDurationMs;
 
         // 0秒の場合は開始しない
         if (totalDurationMs <= 0) return;
 
         endTime = Date.now() + remainingMs;
-        timerId = setInterval(tick, 50);
+        renderTimeAndGauge(remainingMs, 1);
         setTimerState('RUNNING');
         btnStart.textContent = '一時停止';
         btnStart.className = 'control-btn';
+        timerId = setInterval(tick, 50);
       } else if (timerState === 'RUNNING') {
         clearInterval(timerId);
         timerId = null;
@@ -1302,10 +1230,10 @@
         btnStart.className = 'control-btn primary';
       } else if (timerState === 'PAUSED') {
         endTime = Date.now() + remainingMs;
-        timerId = setInterval(tick, 50);
         setTimerState('RUNNING');
         btnStart.textContent = '一時停止';
         btnStart.className = 'control-btn';
+        timerId = setInterval(tick, 50);
       }
     });
 
@@ -1322,9 +1250,7 @@
       btnStart.textContent = 'スタート';
       btnStart.className = 'control-btn primary';
 
-      totalDurationMs = (selectedH * 3600 + selectedM * 60 + selectedS) * 1000;
-      remainingMs = totalDurationMs;
-      renderTimeAndGauge(remainingMs, 1);
+      renderTimeAndGauge(getCalculatedDurationMs(), 1);
     });
 
     gaugeWrapper.addEventListener('click', () => {
@@ -1333,9 +1259,8 @@
       }
     });
 
-    // 初期化
     loadSavedSettings();
-    onDurationChange();
+    renderTimeAndGauge(0, 1);
   </script>
 </body>
 </html>
