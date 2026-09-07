@@ -148,7 +148,7 @@
       animation: pulseAlarm 0.8s infinite ease-in-out;
     }
 
-    /* デジタル時間表示（標準: HH:MM:SS） */
+    /* デジタル時間表示 */
     .time-display {
       position: absolute;
       font-size: clamp(2.8rem, 9.5vw, 5rem);
@@ -158,7 +158,6 @@
       transition: font-size 0.3s ease;
     }
 
-    /* 1時間未満の特大表示（MM:SS） */
     .time-display.compact-mode {
       font-size: clamp(3.8rem, 14vw, 7.5rem);
       font-weight: 300;
@@ -212,7 +211,7 @@
       flex: 1;
       position: relative;
       z-index: 2;
-      cursor: ns-resize; /* PC環境で上下スクロール可能であることを示す */
+      cursor: ns-resize;
     }
 
     .picker-viewport {
@@ -1011,17 +1010,25 @@
 
     let currentSoundType = 'digital';
     let isAudioUnlocked = false;
+    let dummyAudioContext = null;
 
+    // 【修正】完全無音のダミーバッファを使って安全にWebKitをアンロック
     function primeAudio() {
       if (!isAudioUnlocked) {
-        Object.values(audioElements).forEach(aud => {
-          aud.volume = 0.01;
-          aud.play().then(() => {
-            aud.pause();
-            aud.currentTime = 0;
-            aud.volume = 1.0;
-          }).catch(() => {});
-        });
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) {
+            dummyAudioContext = new AudioCtx();
+            const buffer = dummyAudioContext.createBuffer(1, 1, 22050); // 1サンプルのみの完全無音
+            const source = dummyAudioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(dummyAudioContext.destination);
+            source.start(0);
+            if (dummyAudioContext.state === 'suspended') {
+              dummyAudioContext.resume();
+            }
+          }
+        } catch (e) {}
         isAudioUnlocked = true;
       }
     }
@@ -1134,7 +1141,7 @@
       }
     });
 
-    // --- ドラムピッカーコントローラー（タッチ ＋ マウスドラッグ ＋ ホイール完全両立） ---
+    // --- ドラムピッカーコントローラー ---
     class TouchDrumPicker {
       constructor(containerEl, viewportEl, wheelEl, maxVal, initialVal, onChange) {
         this.container = containerEl;
@@ -1206,7 +1213,6 @@
       }
 
       bindEvents() {
-        // --- iPadOS向け タッチイベント（操作感維持・変更なし） ---
         const onTouchStart = (e) => {
           if (timerState !== 'IDLE') return;
           primeAudio();
@@ -1262,25 +1268,21 @@
         window.addEventListener('touchmove', onTouchMove, { passive: true });
         window.addEventListener('touchend', onTouchEnd, { passive: true });
 
-        // PCマウスドラッグ
         this.viewport.addEventListener('mousedown', onTouchStart);
         window.addEventListener('mousemove', onTouchMove);
         window.addEventListener('mouseup', onTouchEnd);
 
-        // --- PCブラウザ専用：マウスホイール操作（iPadタッチを一切阻害しない） ---
         this.container.addEventListener('wheel', (e) => {
           if (timerState !== 'IDLE') return;
-          e.preventDefault(); // 画面全体のスクロールを阻止
+          e.preventDefault();
           primeAudio();
 
           this.wheel.style.transition = '';
 
-          // ホイール回転量に応じたオフセット移動（上下反転を標準スクロールに合わせる）
           const delta = e.deltaY;
           const stepSpeed = 0.55;
           let newY = this.currentY - delta * stepSpeed;
 
-          // 限界値での制動
           const minY = -this.maxVal * ITEM_HEIGHT;
           const maxY = 0;
           if (newY > maxY) newY = maxY;
@@ -1290,7 +1292,6 @@
           this.applyTransform(this.currentY);
           this.updateActiveCell();
 
-          // スクロール停止時に最も近い数字にカチッと吸着スナップ
           clearTimeout(this.wheelScrollTimeout);
           this.wheelScrollTimeout = setTimeout(() => {
             this.snapToNearest();
