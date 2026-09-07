@@ -5,17 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Visual Timer</title>
   
-  <!-- Web App Manifest (Data URI形式で埋め込み：起動時の解像度を即時確定) -->
-  <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Visual%20Timer%22%2C%22short_name%22%3A%22Timer%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23000000%22%2C%22theme_color%22%3A%22%23000000%22%7D">
-
-  <!-- iPadOS / iOS WebApp 専用メタタグ -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Timer">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#000000">
 
-  <!-- アイコン -->
   <link id="dynamicFavicon" rel="icon" type="image/png">
   <link id="dynamicAppleIcon" rel="apple-touch-icon">
 
@@ -41,31 +36,35 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    html {
+    html, body {
       width: 100%;
       height: 100%;
       background-color: var(--bg-color);
       overflow: hidden;
+      position: absolute;
+      inset: 0;
     }
 
-    body {
+    /* 初期化完了まで不可視化してガタつきを物理的に隠蔽 */
+    #appRoot {
       width: 100%;
       height: 100%;
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: space-between;
       padding: calc(12px + env(safe-area-inset-top, 0px)) 20px calc(16px + env(safe-area-inset-bottom, 0px));
-      overflow: hidden;
+      visibility: hidden;
+    }
+
+    #appRoot.ready {
+      visibility: visible;
     }
 
     /* 上部バー */
     .top-bar {
       width: 100%;
-      max-width: 500px;
+      max-width: 480px;
       display: flex;
       justify-content: flex-end;
       height: 48px;
@@ -93,7 +92,7 @@
       transform: scale(0.92);
     }
 
-    body.state-running .icon-btn {
+    .state-running .icon-btn {
       opacity: 0.35;
     }
 
@@ -101,7 +100,7 @@
     .main-stage {
       flex: 1;
       width: 100%;
-      max-width: 500px;
+      max-width: 480px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -109,22 +108,17 @@
       min-height: 0;
     }
 
-    /* 円形ゲージコンテナ（vw/vh単位を排し、アスペクト比でサイズ安定化） */
+    /* 円形ゲージコンテナ（CSS scaleは使用せず、ピクセル直指定） */
     .gauge-wrapper {
-      display: none;
-      width: 90%;
-      max-width: 440px;
-      max-height: 100%;
-      aspect-ratio: 1 / 1;
+      width: 320px;
+      height: 320px;
+      max-width: 82vw;
+      max-height: 82vw;
+      display: flex;
       align-items: center;
       justify-content: center;
-      cursor: pointer;
       position: relative;
-    }
-
-    body.state-running .gauge-wrapper,
-    body.state-paused .gauge-wrapper {
-      display: flex;
+      cursor: pointer;
     }
 
     .gauge-svg {
@@ -161,37 +155,32 @@
 
     .time-display {
       position: absolute;
-      font-size: clamp(2.6rem, 9vw, 4.4rem);
+      font-size: 3.2rem;
       font-weight: 300;
       font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
     }
 
     .time-display.compact-mode {
-      font-size: clamp(3.6rem, 13vw, 6.4rem);
+      font-size: 4.6rem;
       font-weight: 300;
       letter-spacing: -0.03em;
     }
 
     /* 中央ドラムピッカー */
     .picker-box {
-      display: flex;
       width: 100%;
-      max-width: 400px;
+      max-width: 380px;
       height: calc(var(--item-height) * 5);
       background: var(--surface-color);
       border-radius: 24px;
       overflow: hidden;
+      display: flex;
       align-items: center;
       justify-content: space-around;
       padding: 0 16px;
       box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
       position: relative;
-    }
-
-    body.state-running .picker-box,
-    body.state-paused .picker-box {
-      display: none;
     }
 
     .picker-selection-bar {
@@ -242,13 +231,12 @@
       font-weight: 500;
       color: var(--subtext-color);
       font-variant-numeric: tabular-nums;
-      transition: color 0.15s, transform 0.15s;
+      transition: color 0.15s;
     }
 
     .picker-cell.active {
       color: var(--text-color);
       font-weight: 700;
-      transform: scale(1.15);
     }
 
     .picker-unit-label {
@@ -260,7 +248,7 @@
       pointer-events: none;
     }
 
-    /* 下部ボタンバー */
+    /* 下部固定ボタンバー */
     .bottom-bar {
       width: 100%;
       max-width: 440px;
@@ -490,64 +478,47 @@
 </head>
 <body class="state-idle">
 
-  <div class="top-bar">
-    <button class="icon-btn" id="btnOpenSettings" aria-label="設定">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"></circle>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-      </svg>
-    </button>
-  </div>
+  <div id="appRoot">
+    <div class="top-bar">
+      <button class="icon-btn" id="btnOpenSettings" aria-label="設定">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </div>
 
-  <div class="main-stage">
-    <!-- ドラムピッカー -->
-    <div class="picker-box" id="pickerBox">
-      <div class="picker-selection-bar"></div>
+    <div class="main-stage" id="mainStage">
+      <!-- 初期ロード時はドラムピッカーのみ存在（円ゲージは完全排除） -->
+      <div class="picker-box" id="pickerBox">
+        <div class="picker-selection-bar"></div>
 
-      <!-- 時間 -->
-      <div class="picker-col-container" id="containerHours">
-        <div class="picker-viewport">
-          <div class="picker-wheel" id="wheelHours"></div>
+        <div class="picker-col-container" id="containerHours">
+          <div class="picker-viewport"><div class="picker-wheel" id="wheelHours"></div></div>
+          <span class="picker-unit-label">時間</span>
         </div>
-        <span class="picker-unit-label">時間</span>
-      </div>
 
-      <!-- 分 -->
-      <div class="picker-col-container" id="containerMinutes">
-        <div class="picker-viewport">
-          <div class="picker-wheel" id="wheelMinutes"></div>
+        <div class="picker-col-container" id="containerMinutes">
+          <div class="picker-viewport"><div class="picker-wheel" id="wheelMinutes"></div></div>
+          <span class="picker-unit-label">分</span>
         </div>
-        <span class="picker-unit-label">分</span>
-      </div>
 
-      <!-- 秒 -->
-      <div class="picker-col-container" id="containerSeconds">
-        <div class="picker-viewport">
-          <div class="picker-wheel" id="wheelSeconds"></div>
+        <div class="picker-col-container" id="containerSeconds">
+          <div class="picker-viewport"><div class="picker-wheel" id="wheelSeconds"></div></div>
+          <span class="picker-unit-label">秒</span>
         </div>
-        <span class="picker-unit-label">秒</span>
       </div>
     </div>
 
-    <!-- 特大円形ゲージ -->
-    <div class="gauge-wrapper" id="gaugeWrapper">
-      <svg class="gauge-svg" viewBox="0 0 360 360">
-        <circle class="gauge-track" cx="180" cy="180" r="155"></circle>
-        <circle class="gauge-progress" id="progressCircle" cx="180" cy="180" r="155"></circle>
-      </svg>
-      <div class="time-display" id="timeDisplay">00:00</div>
+    <div class="bottom-bar">
+      <div class="buttons-wrapper">
+        <button class="control-btn primary" id="btnStart">スタート</button>
+        <button class="control-btn" id="btnReset">リセット</button>
+      </div>
     </div>
   </div>
 
-  <!-- 下部固定ボタンバー -->
-  <div class="bottom-bar">
-    <div class="buttons-wrapper">
-      <button class="control-btn primary" id="btnStart">スタート</button>
-      <button class="control-btn" id="btnReset">リセット</button>
-    </div>
-  </div>
-
-  <!-- 設定モーダルシート -->
+  <!-- 設定モーダル -->
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal-sheet">
       <div class="modal-header">
@@ -608,20 +579,11 @@
   </div>
 
   <script>
-    // PWA起動時のWebKitズームリセットキック
-    window.addEventListener('load', () => {
-      window.scrollTo(0, 0);
-      setTimeout(() => {
-        window.scrollTo(0, 0);
-      }, 50);
-    });
-
+    // --- 時計アイコン生成 ---
     (function setupIcons() {
       const canvas = document.createElement('canvas');
-      canvas.width = 192;
-      canvas.height = 192;
+      canvas.width = 192; canvas.height = 192;
       const ctx = canvas.getContext('2d');
-
       ctx.fillStyle = '#1c1c1e';
       const r = 40;
       ctx.beginPath();
@@ -632,29 +594,24 @@
       ctx.quadraticCurveTo(0, 0, r, 0); ctx.closePath();
       ctx.fill();
 
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 14;
-      ctx.beginPath();
-      ctx.arc(96, 96, 68, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 14;
+      ctx.beginPath(); ctx.arc(96, 96, 68, 0, Math.PI * 2); ctx.stroke();
 
-      ctx.lineWidth = 12;
-      ctx.lineCap = 'round';
+      ctx.lineWidth = 12; ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(96, 96); ctx.lineTo(96, 52);
       ctx.moveTo(96, 96); ctx.lineTo(134, 96);
       ctx.stroke();
 
       ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(96, 96, 8, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(96, 96, 8, 0, Math.PI * 2); ctx.fill();
 
       const url = canvas.toDataURL('image/png');
       document.getElementById('dynamicFavicon').href = url;
       document.getElementById('dynamicAppleIcon').href = url;
     })();
 
+    // --- Screen Wake Lock ---
     let wakeLock = null;
     async function requestWakeLock() {
       if ('wakeLock' in navigator) {
@@ -675,11 +632,11 @@
       }
     });
 
-    const progressCircle = document.getElementById('progressCircle');
-    const timeDisplay = document.getElementById('timeDisplay');
+    const appRoot = document.getElementById('appRoot');
+    const mainStage = document.getElementById('mainStage');
+    const pickerBox = document.getElementById('pickerBox');
     const btnStart = document.getElementById('btnStart');
     const btnReset = document.getElementById('btnReset');
-    const gaugeWrapper = document.getElementById('gaugeWrapper');
 
     const btnOpenSettings = document.getElementById('btnOpenSettings');
     const btnCloseSettings = document.getElementById('btnCloseSettings');
@@ -692,8 +649,9 @@
     const RADIUS = 155;
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-    progressCircle.style.strokeDasharray = `${CIRCUMFERENCE} ${CIRCUMFERENCE}`;
-    progressCircle.style.strokeDashoffset = '0';
+    let gaugeWrapper = null;
+    let progressCircle = null;
+    let timeDisplay = null;
 
     let totalDurationMs = 0;
     let remainingMs = 0;
@@ -703,6 +661,31 @@
 
     let isAlarmLooping = false;
     let alarmLoopInterval = null;
+
+    // --- ゲージDOMの完全動的生成（初期ロード時のバグを根絶） ---
+    function ensureGaugeDom() {
+      if (gaugeWrapper) return;
+      gaugeWrapper = document.createElement('div');
+      gaugeWrapper.className = 'gauge-wrapper';
+      gaugeWrapper.id = 'gaugeWrapper';
+      gaugeWrapper.innerHTML = `
+        <svg class="gauge-svg" viewBox="0 0 360 360">
+          <circle class="gauge-track" cx="180" cy="180" r="${RADIUS}"></circle>
+          <circle class="gauge-progress" id="progressCircle" cx="180" cy="180" r="${RADIUS}"></circle>
+        </svg>
+        <div class="time-display" id="timeDisplay">00:00</div>
+      `;
+      mainStage.appendChild(gaugeWrapper);
+
+      progressCircle = document.getElementById('progressCircle');
+      timeDisplay = document.getElementById('timeDisplay');
+      progressCircle.style.strokeDasharray = `${CIRCUMFERENCE} ${CIRCUMFERENCE}`;
+      progressCircle.style.strokeDashoffset = '0';
+
+      gaugeWrapper.addEventListener('click', () => {
+        if (isAlarmLooping) stopAlarmLoop();
+      });
+    }
 
     function setTimerState(state) {
       timerState = state;
@@ -719,6 +702,7 @@
       }
     }
 
+    // --- 音声合成 ---
     function createWavHeader(sampleRate, numSamples) {
       const buffer = new Uint8Array(44 + numSamples * 2);
       function writeStr(offset, str) { for (let i = 0; i < str.length; i++) buffer[offset + i] = str.charCodeAt(i); }
@@ -746,7 +730,7 @@
             const t = i / sr; let s = 0;
             const pulse = t % 0.12, seq = Math.floor(t / 0.12);
             if ((seq >= 0 && seq < 4) || (seq >= 5 && seq < 9)) {
-              if (pulse < 0.07) { s = Math.sin(2 * Math.PI * 1174.66 * t) * 0.7 * Math.exp(-pulse * 25); }
+              if (pulse < 0.07) s = Math.sin(2 * Math.PI * 1174.66 * t) * 0.7 * Math.exp(-pulse * 25);
             }
             const val = Math.max(-32768, Math.min(32767, Math.floor(s * 32767)));
             buf[44 + i * 2] = val & 0xff; buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
@@ -898,7 +882,6 @@
 
     function playActiveAlarm() {
       try {
-        globalAudio.pause();
         globalAudio.src = getSoundDataUrl(currentSoundType);
         globalAudio.currentTime = 0;
         globalAudio.volume = 1.0;
@@ -909,7 +892,7 @@
     function startAlarmLoop() {
       if (isAlarmLooping) return;
       isAlarmLooping = true;
-      document.body.classList.add('alarm-active');
+      if (gaugeWrapper) gaugeWrapper.classList.add('alarm-active');
 
       btnStart.textContent = 'アラーム停止';
       btnStart.className = 'control-btn danger';
@@ -922,7 +905,7 @@
     function stopAlarmLoop() {
       if (!isAlarmLooping) return;
       isAlarmLooping = false;
-      document.body.classList.remove('alarm-active');
+      if (gaugeWrapper) gaugeWrapper.classList.remove('alarm-active');
       setTimerState('IDLE');
       clearInterval(alarmLoopInterval);
       alarmLoopInterval = null;
@@ -933,7 +916,8 @@
       btnStart.textContent = 'スタート';
       btnStart.className = 'control-btn primary';
 
-      renderTimeAndGauge(getCalculatedDurationMs(), 1);
+      if (pickerBox) pickerBox.style.display = 'flex';
+      if (gaugeWrapper) gaugeWrapper.style.display = 'none';
     }
 
     function loadSavedSettings() {
@@ -964,9 +948,7 @@
     soundSelect.addEventListener('change', (e) => {
       currentSoundType = e.target.value;
       localStorage.setItem('visual_timer_sound', currentSoundType);
-      if (togglePreview.checked) {
-        playActiveAlarm();
-      }
+      if (togglePreview.checked) playActiveAlarm();
     });
 
     togglePreview.addEventListener('change', (e) => {
@@ -996,7 +978,6 @@
         this.wheel = wheelEl;
         this.maxVal = maxVal;
         this.currentVal = 0;
-
         this.currentY = 0;
         this.startY = 0;
         this.startTouchY = 0;
@@ -1040,15 +1021,11 @@
       snapToNearest() {
         const targetIndex = Math.max(0, Math.min(this.maxVal, Math.round(-this.currentY / ITEM_HEIGHT)));
         const targetY = -targetIndex * ITEM_HEIGHT;
-
         this.wheel.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1)';
         this.currentY = targetY;
         this.applyTransform(this.currentY);
         this.updateActiveCell();
-
-        setTimeout(() => {
-          this.wheel.style.transition = '';
-        }, 220);
+        setTimeout(() => { this.wheel.style.transition = ''; }, 220);
       }
 
       bindEvents() {
@@ -1067,7 +1044,6 @@
         const onTouchMove = (e) => {
           if (!this.isDragging) return;
           if (e.cancelable) e.preventDefault();
-
           const clientY = e.touches[0].clientY;
           const deltaY = clientY - this.startTouchY;
           const now = Date.now();
@@ -1155,7 +1131,6 @@
           if (timerState !== 'IDLE') return;
           e.preventDefault();
           this.wheel.style.transition = '';
-
           const delta = e.deltaY;
           let newY = this.currentY - delta * 0.55;
           const minY = -this.maxVal * ITEM_HEIGHT;
@@ -1187,6 +1162,7 @@
     }
 
     function renderTimeAndGauge(ms, ratio) {
+      if (!timeDisplay || !progressCircle) return;
       const totalSec = Math.ceil(ms / 1000);
       const h = Math.floor(totalSec / 3600);
       const m = Math.floor((totalSec % 3600) / 60);
@@ -1211,7 +1187,6 @@
     function tick() {
       const now = Date.now();
       remainingMs = Math.max(0, endTime - now);
-
       renderTimeAndGauge(remainingMs, remainingMs / totalDurationMs);
 
       if (remainingMs <= 0) {
@@ -1222,6 +1197,7 @@
       }
     }
 
+    // スタートボタン
     btnStart.addEventListener('click', () => {
       if (isAlarmLooping) {
         stopAlarmLoop();
@@ -1231,8 +1207,12 @@
       if (timerState === 'IDLE') {
         totalDurationMs = getCalculatedDurationMs();
         remainingMs = totalDurationMs;
-
         if (totalDurationMs <= 0) return;
+
+        // タイマー始動時に初めて円ゲージを生成・展開
+        ensureGaugeDom();
+        pickerBox.style.display = 'none';
+        gaugeWrapper.style.display = 'flex';
 
         endTime = Date.now() + remainingMs;
         renderTimeAndGauge(remainingMs, 1);
@@ -1268,17 +1248,18 @@
       btnStart.textContent = 'スタート';
       btnStart.className = 'control-btn primary';
 
-      renderTimeAndGauge(getCalculatedDurationMs(), 1);
-    });
-
-    gaugeWrapper.addEventListener('click', () => {
-      if (isAlarmLooping) {
-        stopAlarmLoop();
-      }
+      if (pickerBox) pickerBox.style.display = 'flex';
+      if (gaugeWrapper) gaugeWrapper.style.display = 'none';
     });
 
     loadSavedSettings();
-    renderTimeAndGauge(0, 1);
+
+    // 2フレーム待って完全に座標計算が終わってからフェードイン表示
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        appRoot.classList.add('ready');
+      });
+    });
   </script>
 </body>
 </html>
