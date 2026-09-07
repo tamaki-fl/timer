@@ -31,6 +31,13 @@
       touch-action: manipulation;
     }
 
+    /* ロード時のレイアウトシフト・初期トランジション防止 */
+    body.preload,
+    body.preload * {
+      transition: none !important;
+      animation: none !important;
+    }
+
     body {
       background-color: var(--bg-color);
       color: var(--text-color);
@@ -212,6 +219,7 @@
       position: relative;
       z-index: 2;
       cursor: ns-resize;
+      touch-action: none; /* カラム全体でのタッチ操作を明示 */
     }
 
     .picker-viewport {
@@ -219,6 +227,7 @@
       height: 100%;
       overflow: hidden;
       position: relative;
+      pointer-events: none; /* タッチイベントを親のカラム全体で統一受信 */
     }
 
     .picker-wheel {
@@ -297,7 +306,7 @@
       background: var(--danger-color);
     }
 
-    /* 設定モーダルシート */
+    /* 設定モーダル */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -485,7 +494,7 @@
     }
   </style>
 </head>
-<body class="state-idle">
+<body class="state-idle preload">
 
   <div class="top-bar">
     <button class="icon-btn" id="btnOpenSettings" aria-label="設定">
@@ -605,6 +614,13 @@
   </div>
 
   <script>
+    // 画面ロード完了後に preload クラスを外して滑らかなトランジションを有効化
+    window.addEventListener('load', () => {
+      requestAnimationFrame(() => {
+        document.body.classList.remove('preload');
+      });
+    });
+
     function setupAppleAndChromeIcon() {
       const canvas = document.createElement('canvas');
       canvas.width = 192;
@@ -662,9 +678,7 @@
           wakeLock.addEventListener('release', () => {
             wakeLock = null;
           });
-        } catch (err) {
-          console.warn('Wake Lock request failed:', err);
-        }
+        } catch (err) {}
       }
     }
 
@@ -1010,26 +1024,20 @@
 
     let currentSoundType = 'digital';
     let isAudioUnlocked = false;
-    let dummyAudioContext = null;
 
-    // 【修正】完全無音のダミーバッファを使って安全にWebKitをアンロック
-    function primeAudio() {
+    // スタートボタンを押した瞬間にのみ呼び出す確実なアンロック
+    function primeAudioOnStart() {
       if (!isAudioUnlocked) {
-        try {
-          const AudioCtx = window.AudioContext || window.webkitAudioContext;
-          if (AudioCtx) {
-            dummyAudioContext = new AudioCtx();
-            const buffer = dummyAudioContext.createBuffer(1, 1, 22050); // 1サンプルのみの完全無音
-            const source = dummyAudioContext.createBufferSource();
-            source.buffer = buffer;
-            source.connect(dummyAudioContext.destination);
-            source.start(0);
-            if (dummyAudioContext.state === 'suspended') {
-              dummyAudioContext.resume();
-            }
-          }
-        } catch (e) {}
-        isAudioUnlocked = true;
+        const target = audioElements[currentSoundType];
+        if (target) {
+          target.volume = 0.001;
+          target.play().then(() => {
+            target.pause();
+            target.currentTime = 0;
+            target.volume = 1.0;
+            isAudioUnlocked = true;
+          }).catch(() => {});
+        }
       }
     }
 
@@ -1105,7 +1113,6 @@
     }
 
     soundSelect.addEventListener('change', (e) => {
-      primeAudio();
       currentSoundType = e.target.value;
       localStorage.setItem(STORAGE_KEYS.SOUND, currentSoundType);
       if (togglePreview.checked) {
@@ -1141,7 +1148,7 @@
       }
     });
 
-    // --- ドラムピッカーコントローラー ---
+    // --- ドラムピッカーコントローラー（タッチ ＋ マウスドラッグ ＋ ホイール完全両立） ---
     class TouchDrumPicker {
       constructor(containerEl, viewportEl, wheelEl, maxVal, initialVal, onChange) {
         this.container = containerEl;
@@ -1213,12 +1220,12 @@
       }
 
       bindEvents() {
+        // --- タッチ操作（1タップ目から即座に反応 & 音声ノイズ完全排除） ---
         const onTouchStart = (e) => {
           if (timerState !== 'IDLE') return;
-          primeAudio();
           this.isDragging = true;
           this.wheel.style.transition = '';
-          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          const clientY = e.touches[0].clientY;
           this.startTouchY = clientY;
           this.lastTouchY = clientY;
           this.startY = this.currentY;
@@ -1228,7 +1235,10 @@
 
         const onTouchMove = (e) => {
           if (!this.isDragging) return;
-          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          // iPadOSが1回目のスワイプをブラウザスクロールと誤認するのを完全に防ぐ
+          if (e.cancelable) e.preventDefault();
+
+          const clientY = e.touches[0].clientY;
           const deltaY = clientY - this.startTouchY;
           const now = Date.now();
 
@@ -1264,19 +1274,67 @@
           this.snapToNearest();
         };
 
-        this.viewport.addEventListener('touchstart', onTouchStart, { passive: true });
-        window.addEventListener('touchmove', onTouchMove, { passive: true });
+        // カラム全体（広いエリア）にタッチイベントをバインド
+        this.container.addEventListener('touchstart', onTouchStart, { passive: true });
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
         window.addEventListener('touchend', onTouchEnd, { passive: true });
+        window.addEventListener('touchcancel', onTouchEnd, { passive: true }); // 中断時も確実にスナップ
 
-        this.viewport.addEventListener('mousedown', onTouchStart);
-        window.addEventListener('mousemove', onTouchMove);
-        window.addEventListener('mouseup', onTouchEnd);
+        // --- PCマウス操作（ドラッグ ＆ ホイール） ---
+        const onMouseDown = (e) => {
+          if (timerState !== 'IDLE') return;
+          this.isDragging = true;
+          this.wheel.style.transition = '';
+          const clientY = e.clientY;
+          this.startTouchY = clientY;
+          this.lastTouchY = clientY;
+          this.startY = this.currentY;
+          this.lastTouchTime = Date.now();
+          this.velocity = 0;
+        };
 
+        const onMouseMove = (e) => {
+          if (!this.isDragging) return;
+          const clientY = e.clientY;
+          const deltaY = clientY - this.startTouchY;
+          const now = Date.now();
+
+          let newY = this.startY + deltaY;
+          const minY = -this.maxVal * ITEM_HEIGHT;
+          const maxY = 0;
+          if (newY > maxY) newY = maxY + (newY - maxY) * 0.3;
+          else if (newY < minY) newY = minY + (newY - minY) * 0.3;
+
+          const dt = now - this.lastTouchTime;
+          if (dt > 0) {
+            this.velocity = (clientY - this.lastTouchY) / dt;
+          }
+
+          this.lastTouchY = clientY;
+          this.lastTouchTime = now;
+          this.currentY = newY;
+          this.applyTransform(this.currentY);
+          this.updateActiveCell();
+        };
+
+        const onMouseUp = () => {
+          if (!this.isDragging) return;
+          this.isDragging = false;
+          if (Math.abs(this.velocity) > 0.15) {
+            const momentumY = this.currentY + this.velocity * 120;
+            this.currentY = momentumY;
+          }
+          this.snapToNearest();
+        };
+
+        this.container.addEventListener('mousedown', onMouseDown);
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+
+        // PCマウスホイール
         this.container.addEventListener('wheel', (e) => {
           if (timerState !== 'IDLE') return;
           e.preventDefault();
-          primeAudio();
-
           this.wheel.style.transition = '';
 
           const delta = e.deltaY;
@@ -1372,7 +1430,7 @@
     }
 
     btnStart.addEventListener('click', () => {
-      primeAudio();
+      primeAudioOnStart(); // スタートを押した瞬間のみアンロック
 
       if (isAlarmLooping) {
         stopAlarmLoop();
