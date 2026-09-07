@@ -2,15 +2,20 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Visual Timer</title>
   
+  <!-- Web App Manifest (Data URI形式で埋め込み：起動時の解像度を即時確定) -->
+  <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Visual%20Timer%22%2C%22short_name%22%3A%22Timer%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23000000%22%2C%22theme_color%22%3A%22%23000000%22%7D">
+
+  <!-- iPadOS / iOS WebApp 専用メタタグ -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Timer">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#000000">
 
+  <!-- アイコン -->
   <link id="dynamicFavicon" rel="icon" type="image/png">
   <link id="dynamicAppleIcon" rel="apple-touch-icon">
 
@@ -36,7 +41,7 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    html, body {
+    html {
       width: 100%;
       height: 100%;
       background-color: var(--bg-color);
@@ -44,6 +49,9 @@
     }
 
     body {
+      width: 100%;
+      height: 100%;
+      background-color: var(--bg-color);
       color: var(--text-color);
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", sans-serif;
       display: flex;
@@ -51,12 +59,13 @@
       align-items: center;
       justify-content: space-between;
       padding: calc(12px + env(safe-area-inset-top, 0px)) 20px calc(16px + env(safe-area-inset-bottom, 0px));
+      overflow: hidden;
     }
 
     /* 上部バー */
     .top-bar {
       width: 100%;
-      max-width: 600px;
+      max-width: 500px;
       display: flex;
       justify-content: flex-end;
       height: 48px;
@@ -92,7 +101,7 @@
     .main-stage {
       flex: 1;
       width: 100%;
-      max-width: 600px;
+      max-width: 500px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -100,11 +109,13 @@
       min-height: 0;
     }
 
-    /* 円形ゲージコンテナ：初期状態は display: none で完全に隠し、起動時の飛び出しを根絶 */
+    /* 円形ゲージコンテナ（vw/vh単位を排し、アスペクト比でサイズ安定化） */
     .gauge-wrapper {
       display: none;
-      width: min(80vw, 50vh, 480px);
-      height: min(80vw, 50vh, 480px);
+      width: 90%;
+      max-width: 440px;
+      max-height: 100%;
+      aspect-ratio: 1 / 1;
       align-items: center;
       justify-content: center;
       cursor: pointer;
@@ -150,23 +161,23 @@
 
     .time-display {
       position: absolute;
-      font-size: clamp(2.6rem, 9vw, 4.6rem);
+      font-size: clamp(2.6rem, 9vw, 4.4rem);
       font-weight: 300;
       font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
     }
 
     .time-display.compact-mode {
-      font-size: clamp(3.6rem, 13vw, 6.6rem);
+      font-size: clamp(3.6rem, 13vw, 6.4rem);
       font-weight: 300;
       letter-spacing: -0.03em;
     }
 
-    /* 中央ドラムピッカー：タイマー稼働中は完全に非表示 */
+    /* 中央ドラムピッカー */
     .picker-box {
       display: flex;
       width: 100%;
-      max-width: 420px;
+      max-width: 400px;
       height: calc(var(--item-height) * 5);
       background: var(--surface-color);
       border-radius: 24px;
@@ -597,6 +608,14 @@
   </div>
 
   <script>
+    // PWA起動時のWebKitズームリセットキック
+    window.addEventListener('load', () => {
+      window.scrollTo(0, 0);
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+      }, 50);
+    });
+
     (function setupIcons() {
       const canvas = document.createElement('canvas');
       canvas.width = 192;
@@ -879,6 +898,7 @@
 
     function playActiveAlarm() {
       try {
+        globalAudio.pause();
         globalAudio.src = getSoundDataUrl(currentSoundType);
         globalAudio.currentTime = 0;
         globalAudio.volume = 1.0;
@@ -1202,7 +1222,6 @@
       }
     }
 
-    // --- スタートボタン（確実に始動） ---
     btnStart.addEventListener('click', () => {
       if (isAlarmLooping) {
         stopAlarmLoop();
@@ -1213,7 +1232,6 @@
         totalDurationMs = getCalculatedDurationMs();
         remainingMs = totalDurationMs;
 
-        // 0秒の場合は開始しない
         if (totalDurationMs <= 0) return;
 
         endTime = Date.now() + remainingMs;
