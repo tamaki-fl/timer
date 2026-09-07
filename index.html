@@ -34,6 +34,7 @@
       user-select: none;
       -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", sans-serif;
     }
 
     html, body {
@@ -45,7 +46,6 @@
       inset: 0;
     }
 
-    /* 初期化完了まで不可視化してガタつきを物理的に隠蔽 */
     #appRoot {
       width: 100%;
       height: 100%;
@@ -64,7 +64,7 @@
     /* 上部バー */
     .top-bar {
       width: 100%;
-      max-width: 480px;
+      max-width: 600px;
       display: flex;
       justify-content: flex-end;
       height: 48px;
@@ -100,7 +100,7 @@
     .main-stage {
       flex: 1;
       width: 100%;
-      max-width: 480px;
+      max-width: 800px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -108,12 +108,10 @@
       min-height: 0;
     }
 
-    /* 円形ゲージコンテナ（CSS scaleは使用せず、ピクセル直指定） */
+    /* 特大円形ゲージ（iPadの画面いっぱいに広がるサイズ設計） */
     .gauge-wrapper {
-      width: 320px;
-      height: 320px;
-      max-width: 82vw;
-      max-height: 82vw;
+      width: min(84vw, calc(100vh - 200px), 580px);
+      height: min(84vw, calc(100vh - 200px), 580px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -153,16 +151,24 @@
       animation: pulseAlarm 0.8s infinite ease-in-out;
     }
 
+    /* カウントダウン中の時計表示（確実に中央配置） */
     .time-display {
       position: absolute;
-      font-size: 3.2rem;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: var(--text-color);
+      font-size: clamp(3rem, 10vw, 5.2rem);
       font-weight: 300;
       font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 5;
     }
 
     .time-display.compact-mode {
-      font-size: 4.6rem;
+      font-size: clamp(4.2rem, 15vw, 7.5rem);
       font-weight: 300;
       letter-spacing: -0.03em;
     }
@@ -170,7 +176,7 @@
     /* 中央ドラムピッカー */
     .picker-box {
       width: 100%;
-      max-width: 380px;
+      max-width: 420px;
       height: calc(var(--item-height) * 5);
       background: var(--surface-color);
       border-radius: 24px;
@@ -223,10 +229,12 @@
       will-change: transform;
     }
 
+    /* ドラムロールの文字スタイル（サンセリフ指定） */
     .picker-cell {
       height: var(--item-height);
       line-height: var(--item-height);
       text-align: center;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", sans-serif;
       font-size: 1.65rem;
       font-weight: 500;
       color: var(--subtext-color);
@@ -489,7 +497,6 @@
     </div>
 
     <div class="main-stage" id="mainStage">
-      <!-- 初期ロード時はドラムピッカーのみ存在（円ゲージは完全排除） -->
       <div class="picker-box" id="pickerBox">
         <div class="picker-selection-bar"></div>
 
@@ -662,7 +669,7 @@
     let isAlarmLooping = false;
     let alarmLoopInterval = null;
 
-    // --- ゲージDOMの完全動的生成（初期ロード時のバグを根絶） ---
+    // --- ゲージDOMの動的生成 ---
     function ensureGaugeDom() {
       if (gaugeWrapper) return;
       gaugeWrapper = document.createElement('div');
@@ -677,8 +684,8 @@
       `;
       mainStage.appendChild(gaugeWrapper);
 
-      progressCircle = document.getElementById('progressCircle');
-      timeDisplay = document.getElementById('timeDisplay');
+      progressCircle = gaugeWrapper.querySelector('#progressCircle');
+      timeDisplay = gaugeWrapper.querySelector('#timeDisplay');
       progressCircle.style.strokeDasharray = `${CIRCUMFERENCE} ${CIRCUMFERENCE}`;
       progressCircle.style.strokeDashoffset = '0';
 
@@ -702,7 +709,7 @@
       }
     }
 
-    // --- 音声合成 ---
+    // --- 音声合成エンジン ---
     function createWavHeader(sampleRate, numSamples) {
       const buffer = new Uint8Array(44 + numSamples * 2);
       function writeStr(offset, str) { for (let i = 0; i < str.length; i++) buffer[offset + i] = str.charCodeAt(i); }
@@ -880,8 +887,25 @@
       return soundDataCache[type];
     }
 
+    // WebKit制限解除：ユーザーのタップ内で音声を一度プライム
+    function primeAudioUserGesture() {
+      try {
+        globalAudio.src = getSoundDataUrl(currentSoundType);
+        globalAudio.volume = 0.001;
+        const p = globalAudio.play();
+        if (p && p.then) {
+          p.then(() => {
+            globalAudio.pause();
+            globalAudio.currentTime = 0;
+            globalAudio.volume = 1.0;
+          }).catch(() => {});
+        }
+      } catch (e) {}
+    }
+
     function playActiveAlarm() {
       try {
+        globalAudio.pause();
         globalAudio.src = getSoundDataUrl(currentSoundType);
         globalAudio.currentTime = 0;
         globalAudio.volume = 1.0;
@@ -1078,7 +1102,7 @@
         this.container.addEventListener('touchend', onTouchEnd, { passive: true });
         this.container.addEventListener('touchcancel', onTouchEnd, { passive: true });
 
-        // PCマウス
+        // PCマウス操作
         const onMouseDown = (e) => {
           if (timerState !== 'IDLE') return;
           this.isDragging = true;
@@ -1131,6 +1155,7 @@
           if (timerState !== 'IDLE') return;
           e.preventDefault();
           this.wheel.style.transition = '';
+
           const delta = e.deltaY;
           let newY = this.currentY - delta * 0.55;
           const minY = -this.maxVal * ITEM_HEIGHT;
@@ -1197,8 +1222,10 @@
       }
     }
 
-    // スタートボタン
+    // --- スタートボタン押下処理 ---
     btnStart.addEventListener('click', () => {
+      primeAudioUserGesture(); // WebKitの音声再生権限を確実にアンロック
+
       if (isAlarmLooping) {
         stopAlarmLoop();
         return;
@@ -1209,7 +1236,7 @@
         remainingMs = totalDurationMs;
         if (totalDurationMs <= 0) return;
 
-        // タイマー始動時に初めて円ゲージを生成・展開
+        // タイマー始動時に特大円形ゲージを生成＆表示
         ensureGaugeDom();
         pickerBox.style.display = 'none';
         gaugeWrapper.style.display = 'flex';
