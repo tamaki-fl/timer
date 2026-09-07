@@ -212,6 +212,7 @@
       flex: 1;
       position: relative;
       z-index: 2;
+      cursor: ns-resize; /* PC環境で上下スクロール可能であることを示す */
     }
 
     .picker-viewport {
@@ -502,7 +503,7 @@
       <div class="picker-selection-bar"></div>
 
       <!-- 時間 -->
-      <div class="picker-col-container">
+      <div class="picker-col-container" id="containerHours">
         <div class="picker-viewport" id="viewportHours">
           <div class="picker-wheel" id="wheelHours"></div>
         </div>
@@ -510,7 +511,7 @@
       </div>
 
       <!-- 分 -->
-      <div class="picker-col-container">
+      <div class="picker-col-container" id="containerMinutes">
         <div class="picker-viewport" id="viewportMinutes">
           <div class="picker-wheel" id="wheelMinutes"></div>
         </div>
@@ -518,7 +519,7 @@
       </div>
 
       <!-- 秒 -->
-      <div class="picker-col-container">
+      <div class="picker-col-container" id="containerSeconds">
         <div class="picker-viewport" id="viewportSeconds">
           <div class="picker-wheel" id="wheelSeconds"></div>
         </div>
@@ -738,7 +739,6 @@
       }
     }
 
-    // --- 音声生成エンジン（Base64 WAV合成） ---
     function createWavHeader(sampleRate, numSamples) {
       const buffer = new Uint8Array(44 + numSamples * 2);
       function writeStr(offset, str) {
@@ -779,9 +779,7 @@
       return 'data:audio/wav;base64,' + btoa(binary);
     }
 
-    // --- サウンド定義（既存4種 ＋ 新規4種 = 計8種） ---
     const soundDefs = {
-      // 1. デジタルビープ
       digital: {
         loopInterval: 1200,
         generate: () => {
@@ -807,8 +805,6 @@
           return bufferToDataUrl(buf);
         }
       },
-
-      // 2. チャイム（和音）
       chime: {
         loopInterval: 1800,
         generate: () => {
@@ -840,8 +836,6 @@
           return bufferToDataUrl(buf);
         }
       },
-
-      // 3. シグナル音
       signal: {
         loopInterval: 1100,
         generate: () => {
@@ -865,8 +859,6 @@
           return bufferToDataUrl(buf);
         }
       },
-
-      // 4. ソフトポーン
       bell: {
         loopInterval: 1600,
         generate: () => {
@@ -886,8 +878,6 @@
           return bufferToDataUrl(buf);
         }
       },
-
-      // 5. 【NEW】スクールチャイム（ウエストミンスター風 G4 -> E4 -> D4 -> G3）
       schoolChime: {
         loopInterval: 2400,
         generate: () => {
@@ -896,10 +886,10 @@
           const n = Math.floor(sr * dur);
           const buf = createWavHeader(sr, n);
           const notes = [
-            { freq: 392.00, time: 0.00 }, // G4
-            { freq: 329.63, time: 0.45 }, // E4
-            { freq: 293.66, time: 0.90 }, // D4
-            { freq: 196.00, time: 1.35 }  // G3 (豊かな低音の締め)
+            { freq: 392.00, time: 0.00 },
+            { freq: 329.63, time: 0.45 },
+            { freq: 293.66, time: 0.90 },
+            { freq: 196.00, time: 1.35 }
           ];
           for (let i = 0; i < n; i++) {
             const t = i / sr;
@@ -907,7 +897,6 @@
             notes.forEach(note => {
               if (t >= note.time) {
                 const dt = t - note.time;
-                // 基音 + 2次倍音 + チャイム管の倍音（2.76倍）
                 const tone = Math.sin(2 * Math.PI * note.freq * dt) * 0.55 +
                              Math.sin(2 * Math.PI * (note.freq * 2) * dt) * 0.18 +
                              Math.sin(2 * Math.PI * (note.freq * 2.76) * dt) * 0.10;
@@ -921,8 +910,6 @@
           return bufferToDataUrl(buf);
         }
       },
-
-      // 6. 【NEW】マリンバ（木琴の軽やかな分散和音 F4 -> A4 -> C5 -> E5）
       marimba: {
         loopInterval: 1400,
         generate: () => {
@@ -931,10 +918,10 @@
           const n = Math.floor(sr * dur);
           const buf = createWavHeader(sr, n);
           const notes = [
-            { freq: 349.23, time: 0.00 }, // F4
-            { freq: 440.00, time: 0.12 }, // A4
-            { freq: 523.25, time: 0.24 }, // C5
-            { freq: 659.25, time: 0.36 }  // E5
+            { freq: 349.23, time: 0.00 },
+            { freq: 440.00, time: 0.12 },
+            { freq: 523.25, time: 0.24 },
+            { freq: 659.25, time: 0.36 }
           ];
           for (let i = 0; i < n; i++) {
             const t = i / sr;
@@ -942,7 +929,6 @@
             notes.forEach(note => {
               if (t >= note.time) {
                 const dt = t - note.time;
-                // 木質感を出す奇数倍音と素早いアタック減衰
                 const tone = Math.sin(2 * Math.PI * note.freq * dt) * 0.65 +
                              Math.sin(2 * Math.PI * (note.freq * 3.0) * dt) * 0.20 +
                              Math.sin(2 * Math.PI * (note.freq * 4.0) * dt) * 0.08;
@@ -956,8 +942,6 @@
           return bufferToDataUrl(buf);
         }
       },
-
-      // 7. 【NEW】カームベル（落ち着いた和音の2打連打 C5 + G5）
       calmBell: {
         loopInterval: 2000,
         generate: () => {
@@ -965,14 +949,13 @@
           const dur = 1.8;
           const n = Math.floor(sr * dur);
           const buf = createWavHeader(sr, n);
-          const strikes = [0.00, 0.40]; // 2回打音
+          const strikes = [0.00, 0.40];
           for (let i = 0; i < n; i++) {
             const t = i / sr;
             let s = 0;
             strikes.forEach(st => {
               if (t >= st) {
                 const dt = t - st;
-                // 澄んだ完全5度の和音（523.25Hz + 783.99Hz）
                 const tone = Math.sin(2 * Math.PI * 523.25 * dt) * 0.45 +
                              Math.sin(2 * Math.PI * 783.99 * dt) * 0.35 +
                              Math.sin(2 * Math.PI * 1046.50 * dt) * 0.12;
@@ -986,8 +969,6 @@
           return bufferToDataUrl(buf);
         }
       },
-
-      // 8. 【NEW】アップビート（明るいポップトーン C5 -> E5 -> G5）
       upbeat: {
         loopInterval: 1200,
         generate: () => {
@@ -996,9 +977,9 @@
           const n = Math.floor(sr * dur);
           const buf = createWavHeader(sr, n);
           const notes = [
-            { freq: 523.25, time: 0.00 }, // C5
-            { freq: 659.25, time: 0.10 }, // E5
-            { freq: 783.99, time: 0.20 }  // G5
+            { freq: 523.25, time: 0.00 },
+            { freq: 659.25, time: 0.10 },
+            { freq: 783.99, time: 0.20 }
           ];
           for (let i = 0; i < n; i++) {
             const t = i / sr;
@@ -1006,7 +987,6 @@
             notes.forEach(note => {
               if (t >= note.time) {
                 const dt = t - note.time;
-                // 明るい三角波ライクな合成
                 const tone = Math.sin(2 * Math.PI * note.freq * dt) * 0.6 +
                              Math.sin(2 * Math.PI * (note.freq * 2) * dt) * 0.2 +
                              Math.sin(2 * Math.PI * (note.freq * 3) * dt) * 0.1;
@@ -1154,9 +1134,10 @@
       }
     });
 
-    // --- ドラムピッカーコントローラー ---
+    // --- ドラムピッカーコントローラー（タッチ ＋ マウスドラッグ ＋ ホイール完全両立） ---
     class TouchDrumPicker {
-      constructor(viewportEl, wheelEl, maxVal, initialVal, onChange) {
+      constructor(containerEl, viewportEl, wheelEl, maxVal, initialVal, onChange) {
+        this.container = containerEl;
         this.viewport = viewportEl;
         this.wheel = wheelEl;
         this.maxVal = maxVal;
@@ -1170,6 +1151,8 @@
         this.velocity = 0;
         this.lastTouchY = 0;
         this.lastTouchTime = 0;
+
+        this.wheelScrollTimeout = null;
 
         this.renderCells();
         this.applyTransform(this.currentY);
@@ -1223,6 +1206,7 @@
       }
 
       bindEvents() {
+        // --- iPadOS向け タッチイベント（操作感維持・変更なし） ---
         const onTouchStart = (e) => {
           if (timerState !== 'IDLE') return;
           primeAudio();
@@ -1278,13 +1262,45 @@
         window.addEventListener('touchmove', onTouchMove, { passive: true });
         window.addEventListener('touchend', onTouchEnd, { passive: true });
 
+        // PCマウスドラッグ
         this.viewport.addEventListener('mousedown', onTouchStart);
         window.addEventListener('mousemove', onTouchMove);
         window.addEventListener('mouseup', onTouchEnd);
+
+        // --- PCブラウザ専用：マウスホイール操作（iPadタッチを一切阻害しない） ---
+        this.container.addEventListener('wheel', (e) => {
+          if (timerState !== 'IDLE') return;
+          e.preventDefault(); // 画面全体のスクロールを阻止
+          primeAudio();
+
+          this.wheel.style.transition = '';
+
+          // ホイール回転量に応じたオフセット移動（上下反転を標準スクロールに合わせる）
+          const delta = e.deltaY;
+          const stepSpeed = 0.55;
+          let newY = this.currentY - delta * stepSpeed;
+
+          // 限界値での制動
+          const minY = -this.maxVal * ITEM_HEIGHT;
+          const maxY = 0;
+          if (newY > maxY) newY = maxY;
+          if (newY < minY) newY = minY;
+
+          this.currentY = newY;
+          this.applyTransform(this.currentY);
+          this.updateActiveCell();
+
+          // スクロール停止時に最も近い数字にカチッと吸着スナップ
+          clearTimeout(this.wheelScrollTimeout);
+          this.wheelScrollTimeout = setTimeout(() => {
+            this.snapToNearest();
+          }, 80);
+        }, { passive: false });
       }
     }
 
     const drumH = new TouchDrumPicker(
+      document.getElementById('containerHours'),
       document.getElementById('viewportHours'),
       document.getElementById('wheelHours'),
       23,
@@ -1293,6 +1309,7 @@
     );
 
     const drumM = new TouchDrumPicker(
+      document.getElementById('containerMinutes'),
       document.getElementById('viewportMinutes'),
       document.getElementById('wheelMinutes'),
       59,
@@ -1301,6 +1318,7 @@
     );
 
     const drumS = new TouchDrumPicker(
+      document.getElementById('containerSeconds'),
       document.getElementById('viewportSeconds'),
       document.getElementById('wheelSeconds'),
       59,
