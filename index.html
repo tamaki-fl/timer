@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Visual Timer</title>
   
   <link id="dynamicFavicon" rel="icon" type="image/png">
@@ -28,14 +28,11 @@
       user-select: none;
       -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
     }
 
-    /* ロード時のレイアウトシフト・初期トランジション防止 */
-    body.preload,
-    body.preload * {
-      transition: none !important;
-      animation: none !important;
+    /* 初期レンダリング完了まで画面を完全に隠してガタつきを根絶 */
+    html {
+      background-color: var(--bg-color);
     }
 
     body {
@@ -51,6 +48,12 @@
       padding: 16px 20px calc(20px + env(safe-area-inset-bottom));
       overflow: hidden;
       position: relative;
+      opacity: 0;
+      transition: opacity 0.15s ease-out;
+    }
+
+    body.app-ready {
+      opacity: 1;
     }
 
     /* 上部設定バー */
@@ -91,21 +94,18 @@
     .main-stage {
       flex: 1;
       width: 100%;
-      max-width: 900px;
+      max-width: 800px;
       display: flex;
       align-items: center;
       justify-content: center;
       position: relative;
-      overflow: hidden;
     }
 
     /* 円形ゲージコンテナ */
     .gauge-wrapper {
       position: absolute;
-      width: min(88vw, calc(100vh - 210px));
-      height: min(88vw, calc(100vh - 210px));
-      max-width: 620px;
-      max-height: 620px;
+      width: min(84vw, 55vh, 520px);
+      height: min(84vw, 55vh, 520px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -113,7 +113,7 @@
       opacity: 0;
       pointer-events: none;
       transform: scale(0.92);
-      transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     body.state-running .gauge-wrapper,
@@ -158,15 +158,15 @@
     /* デジタル時間表示 */
     .time-display {
       position: absolute;
-      font-size: clamp(2.8rem, 9.5vw, 5rem);
+      font-size: clamp(2.6rem, 9vw, 4.6rem);
       font-weight: 300;
       font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
-      transition: font-size 0.3s ease;
+      transition: font-size 0.2s ease;
     }
 
     .time-display.compact-mode {
-      font-size: clamp(3.8rem, 14vw, 7.5rem);
+      font-size: clamp(3.6rem, 13vw, 6.8rem);
       font-weight: 300;
       letter-spacing: -0.03em;
     }
@@ -185,10 +185,9 @@
       justify-content: space-around;
       padding: 0 16px;
       box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
-      touch-action: none;
       opacity: 1;
       transform: scale(1);
-      transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     body.state-running .picker-box,
@@ -219,7 +218,7 @@
       position: relative;
       z-index: 2;
       cursor: ns-resize;
-      touch-action: none; /* カラム全体でのタッチ操作を明示 */
+      touch-action: none;
     }
 
     .picker-viewport {
@@ -227,7 +226,7 @@
       height: 100%;
       overflow: hidden;
       position: relative;
-      pointer-events: none; /* タッチイベントを親のカラム全体で統一受信 */
+      pointer-events: none;
     }
 
     .picker-wheel {
@@ -268,7 +267,7 @@
     .bottom-bar {
       width: 100%;
       max-width: 440px;
-      height: 80px;
+      height: 76px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -309,10 +308,7 @@
     /* 設定モーダル */
     .modal-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.6);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
@@ -494,7 +490,7 @@
     }
   </style>
 </head>
-<body class="state-idle preload">
+<body class="state-idle">
 
   <div class="top-bar">
     <button class="icon-btn" id="btnOpenSettings" aria-label="設定">
@@ -512,7 +508,7 @@
 
       <!-- 時間 -->
       <div class="picker-col-container" id="containerHours">
-        <div class="picker-viewport" id="viewportHours">
+        <div class="picker-viewport">
           <div class="picker-wheel" id="wheelHours"></div>
         </div>
         <span class="picker-unit-label">時間</span>
@@ -520,7 +516,7 @@
 
       <!-- 分 -->
       <div class="picker-col-container" id="containerMinutes">
-        <div class="picker-viewport" id="viewportMinutes">
+        <div class="picker-viewport">
           <div class="picker-wheel" id="wheelMinutes"></div>
         </div>
         <span class="picker-unit-label">分</span>
@@ -528,7 +524,7 @@
 
       <!-- 秒 -->
       <div class="picker-col-container" id="containerSeconds">
-        <div class="picker-viewport" id="viewportSeconds">
+        <div class="picker-viewport">
           <div class="picker-wheel" id="wheelSeconds"></div>
         </div>
         <span class="picker-unit-label">秒</span>
@@ -614,14 +610,8 @@
   </div>
 
   <script>
-    // 画面ロード完了後に preload クラスを外して滑らかなトランジションを有効化
-    window.addEventListener('load', () => {
-      requestAnimationFrame(() => {
-        document.body.classList.remove('preload');
-      });
-    });
-
-    function setupAppleAndChromeIcon() {
+    // --- 時計アイコン生成 ---
+    (function setupIcons() {
       const canvas = document.createElement('canvas');
       canvas.width = 192;
       canvas.height = 192;
@@ -630,16 +620,11 @@
       ctx.fillStyle = '#1c1c1e';
       const r = 40;
       ctx.beginPath();
-      ctx.moveTo(r, 0);
-      ctx.lineTo(192 - r, 0);
-      ctx.quadraticCurveTo(192, 0, 192, r);
-      ctx.lineTo(192, 192 - r);
-      ctx.quadraticCurveTo(192, 192, 192 - r, 192);
-      ctx.lineTo(r, 192);
-      ctx.quadraticCurveTo(0, 192, 0, 192 - r);
-      ctx.lineTo(0, r);
-      ctx.quadraticCurveTo(0, 0, r, 0);
-      ctx.closePath();
+      ctx.moveTo(r, 0); ctx.lineTo(192 - r, 0);
+      ctx.quadraticCurveTo(192, 0, 192, r); ctx.lineTo(192, 192 - r);
+      ctx.quadraticCurveTo(192, 192, 192 - r, 192); ctx.lineTo(r, 192);
+      ctx.quadraticCurveTo(0, 192, 0, 192 - r); ctx.lineTo(0, r);
+      ctx.quadraticCurveTo(0, 0, r, 0); ctx.closePath();
       ctx.fill();
 
       ctx.strokeStyle = '#ffffff';
@@ -651,10 +636,8 @@
       ctx.lineWidth = 12;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(96, 96);
-      ctx.lineTo(96, 52);
-      ctx.moveTo(96, 96);
-      ctx.lineTo(134, 96);
+      ctx.moveTo(96, 96); ctx.lineTo(96, 52);
+      ctx.moveTo(96, 96); ctx.lineTo(134, 96);
       ctx.stroke();
 
       ctx.fillStyle = '#ffffff';
@@ -662,46 +645,33 @@
       ctx.arc(96, 96, 8, 0, Math.PI * 2);
       ctx.fill();
 
-      const pngUrl = canvas.toDataURL('image/png');
-      document.getElementById('dynamicFavicon').href = pngUrl;
-      document.getElementById('dynamicAppleIcon').href = pngUrl;
-    }
-    setupAppleAndChromeIcon();
+      const url = canvas.toDataURL('image/png');
+      document.getElementById('dynamicFavicon').href = url;
+      document.getElementById('dynamicAppleIcon').href = url;
+    })();
 
-    // --- Screen Wake Lock API ---
+    // --- Screen Wake Lock ---
     let wakeLock = null;
-
     async function requestWakeLock() {
       if ('wakeLock' in navigator) {
         try {
           wakeLock = await navigator.wakeLock.request('screen');
-          wakeLock.addEventListener('release', () => {
-            wakeLock = null;
-          });
-        } catch (err) {}
+          wakeLock.addEventListener('release', () => { wakeLock = null; });
+        } catch (e) {}
       }
     }
-
     function releaseWakeLock() {
       if (wakeLock) {
-        wakeLock.release().then(() => {
-          wakeLock = null;
-        }).catch(() => {});
+        wakeLock.release().then(() => { wakeLock = null; }).catch(() => {});
       }
     }
-
     document.addEventListener('visibilitychange', async () => {
       if (document.visibilityState === 'visible' && timerState === 'RUNNING') {
         await requestWakeLock();
       }
     });
 
-    const STORAGE_KEYS = {
-      SOUND: 'visual_timer_sound',
-      PREVIEW: 'visual_timer_preview',
-      COLOR: 'visual_timer_color'
-    };
-
+    // --- DOM要素 ---
     const progressCircle = document.getElementById('progressCircle');
     const timeDisplay = document.getElementById('timeDisplay');
     const btnStart = document.getElementById('btnStart');
@@ -730,7 +700,6 @@
     let remainingMs = 0;
     let endTime = 0;
     let timerId = null;
-
     let timerState = 'IDLE';
 
     let isAlarmLooping = false;
@@ -739,7 +708,6 @@
     function setTimerState(state) {
       timerState = state;
       document.body.classList.remove('state-idle', 'state-running', 'state-paused');
-
       if (state === 'RUNNING') {
         document.body.classList.add('state-running');
         requestWakeLock();
@@ -752,36 +720,15 @@
       }
     }
 
+    // --- 音声合成エンジン ---
     function createWavHeader(sampleRate, numSamples) {
       const buffer = new Uint8Array(44 + numSamples * 2);
-      function writeStr(offset, str) {
-        for (let i = 0; i < str.length; i++) buffer[offset + i] = str.charCodeAt(i);
-      }
-      function write32(offset, val) {
-        buffer[offset] = val & 0xff;
-        buffer[offset + 1] = (val >> 8) & 0xff;
-        buffer[offset + 2] = (val >> 16) & 0xff;
-        buffer[offset + 3] = (val >> 24) & 0xff;
-      }
-      function write16(offset, val) {
-        buffer[offset] = val & 0xff;
-        buffer[offset + 1] = (val >> 8) & 0xff;
-      }
-
-      writeStr(0, 'RIFF');
-      write32(4, 36 + numSamples * 2);
-      writeStr(8, 'WAVE');
-      writeStr(12, 'fmt ');
-      write32(16, 16);
-      write16(20, 1);
-      write16(22, 1);
-      write32(24, sampleRate);
-      write32(28, sampleRate * 2);
-      write16(32, 2);
-      write16(34, 16);
-      writeStr(36, 'data');
-      write32(40, numSamples * 2);
-
+      function writeStr(offset, str) { for (let i = 0; i < str.length; i++) buffer[offset + i] = str.charCodeAt(i); }
+      function write32(offset, val) { buffer[offset] = val & 0xff; buffer[offset + 1] = (val >> 8) & 0xff; buffer[offset + 2] = (val >> 16) & 0xff; buffer[offset + 3] = (val >> 24) & 0xff; }
+      function write16(offset, val) { buffer[offset] = val & 0xff; buffer[offset + 1] = (val >> 8) & 0xff; }
+      writeStr(0, 'RIFF'); write32(4, 36 + numSamples * 2); writeStr(8, 'WAVE'); writeStr(12, 'fmt ');
+      write32(16, 16); write16(20, 1); write16(22, 1); write32(24, sampleRate); write32(28, sampleRate * 2);
+      write16(32, 2); write16(34, 16); writeStr(36, 'data'); write32(40, numSamples * 2);
       return buffer;
     }
 
@@ -796,24 +743,15 @@
       digital: {
         loopInterval: 1200,
         generate: () => {
-          const sr = 22050;
-          const dur = 1.0;
-          const n = Math.floor(sr * dur);
-          const buf = createWavHeader(sr, n);
+          const sr = 22050, dur = 1.0, n = Math.floor(sr * dur), buf = createWavHeader(sr, n);
           for (let i = 0; i < n; i++) {
-            const t = i / sr;
-            let s = 0;
-            const pulse = t % 0.12;
-            const seq = Math.floor(t / 0.12);
+            const t = i / sr; let s = 0;
+            const pulse = t % 0.12, seq = Math.floor(t / 0.12);
             if ((seq >= 0 && seq < 4) || (seq >= 5 && seq < 9)) {
-              if (pulse < 0.07) {
-                s = Math.sin(2 * Math.PI * 1174.66 * t) * 0.7;
-                s *= Math.exp(-pulse * 25);
-              }
+              if (pulse < 0.07) { s = Math.sin(2 * Math.PI * 1174.66 * t) * 0.7 * Math.exp(-pulse * 25); }
             }
             const val = Math.max(-32768, Math.min(32767, Math.floor(s * 32767)));
-            buf[44 + i * 2] = val & 0xff;
-            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+            buf[44 + i * 2] = val & 0xff; buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
           }
           return bufferToDataUrl(buf);
         }
@@ -821,30 +759,19 @@
       chime: {
         loopInterval: 1800,
         generate: () => {
-          const sr = 22050;
-          const dur = 1.5;
-          const n = Math.floor(sr * dur);
-          const buf = createWavHeader(sr, n);
-          const notes = [
-            { freq: 523.25, time: 0.0 },
-            { freq: 659.25, time: 0.15 },
-            { freq: 783.99, time: 0.30 },
-            { freq: 1046.50, time: 0.45 }
-          ];
+          const sr = 22050, dur = 1.5, n = Math.floor(sr * dur), buf = createWavHeader(sr, n);
+          const notes = [{ f: 523.25, t: 0.0 }, { f: 659.25, t: 0.15 }, { f: 783.99, t: 0.30 }, { f: 1046.50, t: 0.45 }];
           for (let i = 0; i < n; i++) {
-            const t = i / sr;
-            let s = 0;
+            const curT = i / sr; let s = 0;
             notes.forEach(note => {
-              if (t >= note.time) {
-                const dt = t - note.time;
-                const tone = Math.sin(2 * Math.PI * note.freq * dt) * 0.5 +
-                             Math.sin(2 * Math.PI * (note.freq * 2.76) * dt) * 0.15;
+              if (curT >= note.t) {
+                const dt = curT - note.t;
+                const tone = Math.sin(2 * Math.PI * note.f * dt) * 0.5 + Math.sin(2 * Math.PI * (note.f * 2.76) * dt) * 0.15;
                 s += tone * Math.exp(-dt * 4.5);
               }
             });
             const val = Math.max(-32768, Math.min(32767, Math.floor(s * 25000)));
-            buf[44 + i * 2] = val & 0xff;
-            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+            buf[44 + i * 2] = val & 0xff; buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
           }
           return bufferToDataUrl(buf);
         }
@@ -852,22 +779,13 @@
       signal: {
         loopInterval: 1100,
         generate: () => {
-          const sr = 22050;
-          const dur = 0.9;
-          const n = Math.floor(sr * dur);
-          const buf = createWavHeader(sr, n);
+          const sr = 22050, dur = 0.9, n = Math.floor(sr * dur), buf = createWavHeader(sr, n);
           for (let i = 0; i < n; i++) {
-            const t = i / sr;
-            let s = 0;
-            const cycle = t % 0.45;
-            if (cycle < 0.09) {
-              s = Math.sin(2 * Math.PI * 880 * t) * 0.7;
-            } else if (cycle >= 0.11 && cycle < 0.20) {
-              s = Math.sin(2 * Math.PI * 1318.51 * t) * 0.7;
-            }
+            const t = i / sr; let s = 0; const cycle = t % 0.45;
+            if (cycle < 0.09) s = Math.sin(2 * Math.PI * 880 * t) * 0.7;
+            else if (cycle >= 0.11 && cycle < 0.20) s = Math.sin(2 * Math.PI * 1318.51 * t) * 0.7;
             const val = Math.max(-32768, Math.min(32767, Math.floor(s * 32767)));
-            buf[44 + i * 2] = val & 0xff;
-            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+            buf[44 + i * 2] = val & 0xff; buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
           }
           return bufferToDataUrl(buf);
         }
@@ -875,18 +793,12 @@
       bell: {
         loopInterval: 1600,
         generate: () => {
-          const sr = 22050;
-          const dur = 1.4;
-          const n = Math.floor(sr * dur);
-          const buf = createWavHeader(sr, n);
+          const sr = 22050, dur = 1.4, n = Math.floor(sr * dur), buf = createWavHeader(sr, n);
           for (let i = 0; i < n; i++) {
             const t = i / sr;
-            let s = Math.sin(2 * Math.PI * 659.25 * t) * 0.7 +
-                    Math.sin(2 * Math.PI * 1318.5 * t) * 0.2;
-            s *= Math.exp(-t * 2.8);
+            let s = (Math.sin(2 * Math.PI * 659.25 * t) * 0.7 + Math.sin(2 * Math.PI * 1318.5 * t) * 0.2) * Math.exp(-t * 2.8);
             const val = Math.max(-32768, Math.min(32767, Math.floor(s * 32767)));
-            buf[44 + i * 2] = val & 0xff;
-            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+            buf[44 + i * 2] = val & 0xff; buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
           }
           return bufferToDataUrl(buf);
         }
@@ -894,31 +806,19 @@
       schoolChime: {
         loopInterval: 2400,
         generate: () => {
-          const sr = 22050;
-          const dur = 2.2;
-          const n = Math.floor(sr * dur);
-          const buf = createWavHeader(sr, n);
-          const notes = [
-            { freq: 392.00, time: 0.00 },
-            { freq: 329.63, time: 0.45 },
-            { freq: 293.66, time: 0.90 },
-            { freq: 196.00, time: 1.35 }
-          ];
+          const sr = 22050, dur = 2.2, n = Math.floor(sr * dur), buf = createWavHeader(sr, n);
+          const notes = [{ f: 392.00, t: 0.00 }, { f: 329.63, t: 0.45 }, { f: 293.66, t: 0.90 }, { f: 196.00, t: 1.35 }];
           for (let i = 0; i < n; i++) {
-            const t = i / sr;
-            let s = 0;
+            const curT = i / sr; let s = 0;
             notes.forEach(note => {
-              if (t >= note.time) {
-                const dt = t - note.time;
-                const tone = Math.sin(2 * Math.PI * note.freq * dt) * 0.55 +
-                             Math.sin(2 * Math.PI * (note.freq * 2) * dt) * 0.18 +
-                             Math.sin(2 * Math.PI * (note.freq * 2.76) * dt) * 0.10;
+              if (curT >= note.t) {
+                const dt = curT - note.t;
+                const tone = Math.sin(2 * Math.PI * note.f * dt) * 0.55 + Math.sin(2 * Math.PI * (note.f * 2) * dt) * 0.18 + Math.sin(2 * Math.PI * (note.f * 2.76) * dt) * 0.10;
                 s += tone * Math.exp(-dt * 3.2);
               }
             });
             const val = Math.max(-32768, Math.min(32767, Math.floor(s * 23000)));
-            buf[44 + i * 2] = val & 0xff;
-            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+            buf[44 + i * 2] = val & 0xff; buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
           }
           return bufferToDataUrl(buf);
         }
@@ -926,31 +826,19 @@
       marimba: {
         loopInterval: 1400,
         generate: () => {
-          const sr = 22050;
-          const dur = 1.2;
-          const n = Math.floor(sr * dur);
-          const buf = createWavHeader(sr, n);
-          const notes = [
-            { freq: 349.23, time: 0.00 },
-            { freq: 440.00, time: 0.12 },
-            { freq: 523.25, time: 0.24 },
-            { freq: 659.25, time: 0.36 }
-          ];
+          const sr = 22050, dur = 1.2, n = Math.floor(sr * dur), buf = createWavHeader(sr, n);
+          const notes = [{ f: 349.23, t: 0.00 }, { f: 440.00, t: 0.12 }, { f: 523.25, t: 0.24 }, { f: 659.25, t: 0.36 }];
           for (let i = 0; i < n; i++) {
-            const t = i / sr;
-            let s = 0;
+            const curT = i / sr; let s = 0;
             notes.forEach(note => {
-              if (t >= note.time) {
-                const dt = t - note.time;
-                const tone = Math.sin(2 * Math.PI * note.freq * dt) * 0.65 +
-                             Math.sin(2 * Math.PI * (note.freq * 3.0) * dt) * 0.20 +
-                             Math.sin(2 * Math.PI * (note.freq * 4.0) * dt) * 0.08;
+              if (curT >= note.t) {
+                const dt = curT - note.t;
+                const tone = Math.sin(2 * Math.PI * note.f * dt) * 0.65 + Math.sin(2 * Math.PI * (note.f * 3) * dt) * 0.20;
                 s += tone * Math.exp(-dt * 7.5);
               }
             });
             const val = Math.max(-32768, Math.min(32767, Math.floor(s * 25000)));
-            buf[44 + i * 2] = val & 0xff;
-            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+            buf[44 + i * 2] = val & 0xff; buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
           }
           return bufferToDataUrl(buf);
         }
@@ -958,26 +846,19 @@
       calmBell: {
         loopInterval: 2000,
         generate: () => {
-          const sr = 22050;
-          const dur = 1.8;
-          const n = Math.floor(sr * dur);
-          const buf = createWavHeader(sr, n);
+          const sr = 22050, dur = 1.8, n = Math.floor(sr * dur), buf = createWavHeader(sr, n);
           const strikes = [0.00, 0.40];
           for (let i = 0; i < n; i++) {
-            const t = i / sr;
-            let s = 0;
+            const curT = i / sr; let s = 0;
             strikes.forEach(st => {
-              if (t >= st) {
-                const dt = t - st;
-                const tone = Math.sin(2 * Math.PI * 523.25 * dt) * 0.45 +
-                             Math.sin(2 * Math.PI * 783.99 * dt) * 0.35 +
-                             Math.sin(2 * Math.PI * 1046.50 * dt) * 0.12;
+              if (curT >= st) {
+                const dt = curT - st;
+                const tone = Math.sin(2 * Math.PI * 523.25 * dt) * 0.45 + Math.sin(2 * Math.PI * 783.99 * dt) * 0.35;
                 s += tone * Math.exp(-dt * 3.0);
               }
             });
             const val = Math.max(-32768, Math.min(32767, Math.floor(s * 24000)));
-            buf[44 + i * 2] = val & 0xff;
-            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+            buf[44 + i * 2] = val & 0xff; buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
           }
           return bufferToDataUrl(buf);
         }
@@ -985,71 +866,47 @@
       upbeat: {
         loopInterval: 1200,
         generate: () => {
-          const sr = 22050;
-          const dur = 1.0;
-          const n = Math.floor(sr * dur);
-          const buf = createWavHeader(sr, n);
-          const notes = [
-            { freq: 523.25, time: 0.00 },
-            { freq: 659.25, time: 0.10 },
-            { freq: 783.99, time: 0.20 }
-          ];
+          const sr = 22050, dur = 1.0, n = Math.floor(sr * dur), buf = createWavHeader(sr, n);
+          const notes = [{ f: 523.25, t: 0.00 }, { f: 659.25, t: 0.10 }, { f: 783.99, t: 0.20 }];
           for (let i = 0; i < n; i++) {
-            const t = i / sr;
-            let s = 0;
+            const curT = i / sr; let s = 0;
             notes.forEach(note => {
-              if (t >= note.time) {
-                const dt = t - note.time;
-                const tone = Math.sin(2 * Math.PI * note.freq * dt) * 0.6 +
-                             Math.sin(2 * Math.PI * (note.freq * 2) * dt) * 0.2 +
-                             Math.sin(2 * Math.PI * (note.freq * 3) * dt) * 0.1;
+              if (curT >= note.t) {
+                const dt = curT - note.t;
+                const tone = Math.sin(2 * Math.PI * note.f * dt) * 0.6 + Math.sin(2 * Math.PI * (note.f * 2) * dt) * 0.2;
                 s += tone * Math.exp(-dt * 6.0);
               }
             });
             const val = Math.max(-32768, Math.min(32767, Math.floor(s * 26000)));
-            buf[44 + i * 2] = val & 0xff;
-            buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
+            buf[44 + i * 2] = val & 0xff; buf[44 + i * 2 + 1] = (val >> 8) & 0xff;
           }
           return bufferToDataUrl(buf);
         }
       }
     };
 
-    const audioElements = {};
-    Object.keys(soundDefs).forEach(key => {
-      const audio = new Audio(soundDefs[key].generate());
-      audio.preload = 'auto';
-      audioElements[key] = audio;
-    });
+    // 音声インスタンスを「唯一無二の単一Audioオブジェクト」で運用（多重再生バグを構造上防止）
+    const globalAudio = new Audio();
+    globalAudio.preload = 'auto';
 
     let currentSoundType = 'digital';
-    let isAudioUnlocked = false;
+    const soundDataCache = {};
 
-    // スタートボタンを押した瞬間にのみ呼び出す確実なアンロック
-    function primeAudioOnStart() {
-      if (!isAudioUnlocked) {
-        const target = audioElements[currentSoundType];
-        if (target) {
-          target.volume = 0.001;
-          target.play().then(() => {
-            target.pause();
-            target.currentTime = 0;
-            target.volume = 1.0;
-            isAudioUnlocked = true;
-          }).catch(() => {});
-        }
+    function getSoundDataUrl(type) {
+      if (!soundDataCache[type]) {
+        soundDataCache[type] = soundDefs[type].generate();
       }
+      return soundDataCache[type];
     }
 
-    function playSingleSound() {
-      const target = audioElements[currentSoundType];
-      if (target) {
-        try {
-          target.currentTime = 0;
-          target.volume = 1.0;
-          target.play().catch(() => {});
-        } catch (e) {}
-      }
+    function playActiveAlarm() {
+      try {
+        globalAudio.pause();
+        globalAudio.src = getSoundDataUrl(currentSoundType);
+        globalAudio.currentTime = 0;
+        globalAudio.volume = 1.0;
+        globalAudio.play().catch(() => {});
+      } catch (e) {}
     }
 
     function startAlarmLoop() {
@@ -1060,9 +917,9 @@
       btnStart.textContent = 'アラーム停止';
       btnStart.className = 'control-btn danger';
 
-      playSingleSound();
+      playActiveAlarm();
       const interval = soundDefs[currentSoundType].loopInterval;
-      alarmLoopInterval = setInterval(playSingleSound, interval);
+      alarmLoopInterval = setInterval(playActiveAlarm, interval);
     }
 
     function stopAlarmLoop() {
@@ -1073,11 +930,8 @@
       clearInterval(alarmLoopInterval);
       alarmLoopInterval = null;
 
-      const target = audioElements[currentSoundType];
-      if (target) {
-        target.pause();
-        target.currentTime = 0;
-      }
+      globalAudio.pause();
+      globalAudio.currentTime = 0;
 
       btnStart.textContent = 'スタート';
       btnStart.className = 'control-btn primary';
@@ -1087,19 +941,20 @@
       renderTimeAndGauge(remainingMs, 1);
     }
 
+    // --- localStorage復元 ---
     function loadSavedSettings() {
-      const savedSound = localStorage.getItem(STORAGE_KEYS.SOUND);
+      const savedSound = localStorage.getItem('visual_timer_sound');
       if (savedSound && soundDefs[savedSound]) {
         currentSoundType = savedSound;
         soundSelect.value = savedSound;
       }
 
-      const savedPreview = localStorage.getItem(STORAGE_KEYS.PREVIEW);
+      const savedPreview = localStorage.getItem('visual_timer_preview');
       if (savedPreview !== null) {
         togglePreview.checked = savedPreview === 'true';
       }
 
-      const savedColor = localStorage.getItem(STORAGE_KEYS.COLOR);
+      const savedColor = localStorage.getItem('visual_timer_color');
       if (savedColor) {
         document.documentElement.style.setProperty('--primary-color', savedColor);
         document.querySelectorAll('.color-btn').forEach(b => {
@@ -1112,16 +967,17 @@
       }
     }
 
+    // サウンド選択時の手動試聴（初期ロード時は一切鳴らさない）
     soundSelect.addEventListener('change', (e) => {
       currentSoundType = e.target.value;
-      localStorage.setItem(STORAGE_KEYS.SOUND, currentSoundType);
+      localStorage.setItem('visual_timer_sound', currentSoundType);
       if (togglePreview.checked) {
-        setTimeout(playSingleSound, 50);
+        playActiveAlarm();
       }
     });
 
     togglePreview.addEventListener('change', (e) => {
-      localStorage.setItem(STORAGE_KEYS.PREVIEW, e.target.checked);
+      localStorage.setItem('visual_timer_preview', e.target.checked);
     });
 
     colorPresets.addEventListener('click', (e) => {
@@ -1131,28 +987,19 @@
       btn.classList.add('active');
       const color = btn.dataset.color;
       document.documentElement.style.setProperty('--primary-color', color);
-      localStorage.setItem(STORAGE_KEYS.COLOR, color);
+      localStorage.setItem('visual_timer_color', color);
     });
 
-    btnOpenSettings.addEventListener('click', () => {
-      modalOverlay.classList.add('open');
-    });
-
-    btnCloseSettings.addEventListener('click', () => {
-      modalOverlay.classList.remove('open');
-    });
-
+    btnOpenSettings.addEventListener('click', () => modalOverlay.classList.add('open'));
+    btnCloseSettings.addEventListener('click', () => modalOverlay.classList.remove('open'));
     modalOverlay.addEventListener('click', (e) => {
-      if (e.target === modalOverlay) {
-        modalOverlay.classList.remove('open');
-      }
+      if (e.target === modalOverlay) modalOverlay.classList.remove('open');
     });
 
-    // --- ドラムピッカーコントローラー（タッチ ＋ マウスドラッグ ＋ ホイール完全両立） ---
+    // --- ドラムピッカーコントローラー（第1タップ目から100%吸着回転） ---
     class TouchDrumPicker {
-      constructor(containerEl, viewportEl, wheelEl, maxVal, initialVal, onChange) {
+      constructor(containerEl, wheelEl, maxVal, initialVal, onChange) {
         this.container = containerEl;
-        this.viewport = viewportEl;
         this.wheel = wheelEl;
         this.maxVal = maxVal;
         this.currentVal = initialVal;
@@ -1165,7 +1012,6 @@
         this.velocity = 0;
         this.lastTouchY = 0;
         this.lastTouchTime = 0;
-
         this.wheelScrollTimeout = null;
 
         this.renderCells();
@@ -1193,11 +1039,8 @@
       updateActiveCell() {
         const index = Math.max(0, Math.min(this.maxVal, Math.round(-this.currentY / ITEM_HEIGHT)));
         this.cells.forEach((c, idx) => {
-          if (idx === index) {
-            c.classList.add('active');
-          } else {
-            c.classList.remove('active');
-          }
+          if (idx === index) c.classList.add('active');
+          else c.classList.remove('active');
         });
         if (this.currentVal !== index) {
           this.currentVal = index;
@@ -1220,7 +1063,7 @@
       }
 
       bindEvents() {
-        // --- タッチ操作（1タップ目から即座に反応 & 音声ノイズ完全排除） ---
+        // --- タッチ操作（1タップ目から即時追従・オーディオ処理一切排除） ---
         const onTouchStart = (e) => {
           if (timerState !== 'IDLE') return;
           this.isDragging = true;
@@ -1235,8 +1078,7 @@
 
         const onTouchMove = (e) => {
           if (!this.isDragging) return;
-          // iPadOSが1回目のスワイプをブラウザスクロールと誤認するのを完全に防ぐ
-          if (e.cancelable) e.preventDefault();
+          if (e.cancelable) e.preventDefault(); // iPadOSのスクロール横取りを防止
 
           const clientY = e.touches[0].clientY;
           const deltaY = clientY - this.startTouchY;
@@ -1245,16 +1087,11 @@
           let newY = this.startY + deltaY;
           const minY = -this.maxVal * ITEM_HEIGHT;
           const maxY = 0;
-          if (newY > maxY) {
-            newY = maxY + (newY - maxY) * 0.3;
-          } else if (newY < minY) {
-            newY = minY + (newY - minY) * 0.3;
-          }
+          if (newY > maxY) newY = maxY + (newY - maxY) * 0.3;
+          else if (newY < minY) newY = minY + (newY - minY) * 0.3;
 
           const dt = now - this.lastTouchTime;
-          if (dt > 0) {
-            this.velocity = (clientY - this.lastTouchY) / dt;
-          }
+          if (dt > 0) this.velocity = (clientY - this.lastTouchY) / dt;
 
           this.lastTouchY = clientY;
           this.lastTouchTime = now;
@@ -1266,21 +1103,18 @@
         const onTouchEnd = () => {
           if (!this.isDragging) return;
           this.isDragging = false;
-
           if (Math.abs(this.velocity) > 0.15) {
-            const momentumY = this.currentY + this.velocity * 120;
-            this.currentY = momentumY;
+            this.currentY = this.currentY + this.velocity * 120;
           }
           this.snapToNearest();
         };
 
-        // カラム全体（広いエリア）にタッチイベントをバインド
-        this.container.addEventListener('touchstart', onTouchStart, { passive: true });
-        window.addEventListener('touchmove', onTouchMove, { passive: false });
-        window.addEventListener('touchend', onTouchEnd, { passive: true });
-        window.addEventListener('touchcancel', onTouchEnd, { passive: true }); // 中断時も確実にスナップ
+        this.container.addEventListener('touchstart', onTouchStart, { passive: false });
+        this.container.addEventListener('touchmove', onTouchMove, { passive: false });
+        this.container.addEventListener('touchend', onTouchEnd, { passive: true });
+        this.container.addEventListener('touchcancel', onTouchEnd, { passive: true });
 
-        // --- PCマウス操作（ドラッグ ＆ ホイール） ---
+        // --- PCマウス操作 ---
         const onMouseDown = (e) => {
           if (timerState !== 'IDLE') return;
           this.isDragging = true;
@@ -1306,9 +1140,7 @@
           else if (newY < minY) newY = minY + (newY - minY) * 0.3;
 
           const dt = now - this.lastTouchTime;
-          if (dt > 0) {
-            this.velocity = (clientY - this.lastTouchY) / dt;
-          }
+          if (dt > 0) this.velocity = (clientY - this.lastTouchY) / dt;
 
           this.lastTouchY = clientY;
           this.lastTouchTime = now;
@@ -1321,8 +1153,7 @@
           if (!this.isDragging) return;
           this.isDragging = false;
           if (Math.abs(this.velocity) > 0.15) {
-            const momentumY = this.currentY + this.velocity * 120;
-            this.currentY = momentumY;
+            this.currentY = this.currentY + this.velocity * 120;
           }
           this.snapToNearest();
         };
@@ -1338,9 +1169,7 @@
           this.wheel.style.transition = '';
 
           const delta = e.deltaY;
-          const stepSpeed = 0.55;
-          let newY = this.currentY - delta * stepSpeed;
-
+          let newY = this.currentY - delta * 0.55;
           const minY = -this.maxVal * ITEM_HEIGHT;
           const maxY = 0;
           if (newY > maxY) newY = maxY;
@@ -1360,7 +1189,6 @@
 
     const drumH = new TouchDrumPicker(
       document.getElementById('containerHours'),
-      document.getElementById('viewportHours'),
       document.getElementById('wheelHours'),
       23,
       selectedH,
@@ -1369,7 +1197,6 @@
 
     const drumM = new TouchDrumPicker(
       document.getElementById('containerMinutes'),
-      document.getElementById('viewportMinutes'),
       document.getElementById('wheelMinutes'),
       59,
       selectedM,
@@ -1378,7 +1205,6 @@
 
     const drumS = new TouchDrumPicker(
       document.getElementById('containerSeconds'),
-      document.getElementById('viewportSeconds'),
       document.getElementById('wheelSeconds'),
       59,
       selectedS,
@@ -1430,7 +1256,17 @@
     }
 
     btnStart.addEventListener('click', () => {
-      primeAudioOnStart(); // スタートを押した瞬間のみアンロック
+      // 唯一ここでWebKitのオーディオ制限を解除
+      if (!isAudioUnlocked) {
+        globalAudio.src = getSoundDataUrl(currentSoundType);
+        globalAudio.volume = 0.001;
+        globalAudio.play().then(() => {
+          globalAudio.pause();
+          globalAudio.currentTime = 0;
+          globalAudio.volume = 1.0;
+          isAudioUnlocked = true;
+        }).catch(() => {});
+      }
 
       if (isAlarmLooping) {
         stopAlarmLoop();
@@ -1488,8 +1324,14 @@
       }
     });
 
+    // 初期化シーケンス
     loadSavedSettings();
     onDurationChange();
+
+    // DOM計算・レイアウトが完全に落ち着いてから画面をフェードイン
+    requestAnimationFrame(() => {
+      document.body.classList.add('app-ready');
+    });
   </script>
 </body>
 </html>
